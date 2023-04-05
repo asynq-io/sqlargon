@@ -78,6 +78,11 @@ class Database:
     def from_settings(cls, settings: DatabaseSettings):
         return cls(**settings.dict())
 
+    @classmethod
+    def from_env(cls, **kwargs):
+        settings = DatabaseSettings(**kwargs)
+        return cls.from_settings(settings)
+
     def inject_session(self):
         def wrapper(func):
             @functools.wraps(func)
