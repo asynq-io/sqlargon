@@ -36,6 +36,7 @@ class Database:
         echo_pool: bool = True,
         json_serializer: Callable[[Any], str] = json_dumps,
         json_deserializer: Callable[[str], Any] = json_loads,
+        use_depends: bool = False,
         **kwargs: Any,
     ) -> None:
         self.engine = create_async_engine(
@@ -55,9 +56,14 @@ class Database:
             bind=self.engine, expire_on_commit=False
         )
         self.session = asynccontextmanager(self.session_factory)
-        self.__call__ = self.session_factory
-
         configure_repository_class(self.engine.url.get_dialect().name)
+
+        if use_depends:
+            from fastapi import Depends
+
+            from .integrations.fastapi import depends_on
+
+            depends_on(Depends(self.session_factory))(SQLAlchemyModelRepository)
 
     async def session_factory(self) -> AsyncGenerator[AsyncSession, None]:
         async with self.session_maker() as session:
