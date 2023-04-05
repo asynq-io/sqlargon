@@ -1,0 +1,19 @@
+version: "3.8"
+services:
+  postgres:
+    hostname: postgres
+    image: postgres:12
+    command: ["postgres", "-c", "log_statement=all"] # dev only
+    volumes:
+      - pg:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+
+volumes:
+  pg:

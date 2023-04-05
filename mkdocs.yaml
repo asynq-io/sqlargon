@@ -1,0 +1,41 @@
+site_name: "SQLAurum"
+site_description: SQLAlchemy asyncio session and core query wrapper with useful utils.
+theme:
+  name: "material"
+  palette:
+  - scheme: default
+
+    toggle:
+      icon: material/toggle-switch
+      name: Switch to dark mode
+  - scheme: slate
+    toggle:
+      icon: material/toggle-switch-off-outline
+      name: Switch to light mode
+  features:
+  - search.suggest
+  - search.highlight
+  - content.tabs.link
+repo_name: sqlaurum
+repo_url: https://github.com/performancemedia/sqlaurum
+nav:
+  - "SQLAurum": index.md
+  - "Alembic Migrations": migrations.md
+
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_signature_annotations: true
+            docstring_style: sphinx
