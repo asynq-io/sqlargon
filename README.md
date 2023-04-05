@@ -29,13 +29,13 @@ from one object which provides somewhat of repository pattern. This solution has
 ```python
 import sqlalchemy as sa
 
-from sqlargon import UUID, GenerateUUID, Database, Base, SQLAlchemyModelRepository
+from sqlargon import GUID, GenerateUUID, Database, Base, SQLAlchemyModelRepository
 
 db = Database(url=...)
 
 class User(Base):
         id = sa.Column(
-            UUID(), primary_key=True, server_default=GenerateUUID(), nullable=False
+            GUID(), primary_key=True, server_default=GenerateUUID(), nullable=False
         )
         name = sa.Column(sa.Unicode(255))
 
@@ -81,16 +81,8 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlargon import Database, SQLAlchemyModelRepository
 
-db = Database(url="sqlite+aiosqlite:///:memory:")
+db = Database(url="sqlite+aiosqlite:///:memory:", use_depends=True)
 
-
-
-
-class Repository(SQLAlchemyModelRepository, abstract=True):
-    """Base manager, which uses fastapi depends to get session object"""
-
-    def __init__(self, session: AsyncSession = Depends(db)):
-        super().__init__(session)
 
 class UserRepository(Repository[User]):
     ...
