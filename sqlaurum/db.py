@@ -28,7 +28,7 @@ class Database:
     def __init__(
         self,
         url: str,
-        poolclass: Pool = AsyncAdaptedQueuePool,
+        poolclass: type[Pool] = AsyncAdaptedQueuePool,
         pool_size: int = 10,
         max_overflow: int = 0,
         pool_recycle: int = 1200,
