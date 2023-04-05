@@ -1,4 +1,4 @@
-site_name: "SQLAurum"
+site_name: "SQLArgon"
 site_description: SQLAlchemy asyncio session and core query wrapper with useful utils.
 theme:
   name: "material"
@@ -16,10 +16,10 @@ theme:
   - search.suggest
   - search.highlight
   - content.tabs.link
-repo_name: sqlaurum
-repo_url: https://github.com/performancemedia/sqlaurum
+repo_name: sqlargon
+repo_url: https://github.com/performancemedia/sqlargon
 nav:
-  - "SQLAurum": index.md
+  - "SQLArgon": index.md
   - "Alembic Migrations": migrations.md
 
 

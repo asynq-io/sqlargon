@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "sqlaurum"
+name = "sqlargon"
 version = "0.0.1"
 description = "SQLAlchemy utils for Postgres and Sqlite"
 readme = "README.md"
@@ -38,7 +38,7 @@ mkdocs-gen-files = "^0.4.0"
 mkdocstrings-python = "^0.8.2"
 
 [tool.pytest.ini_options]
-addopts = "--cov=./sqlaurum"
+addopts = "--cov=./sqlargon"
 testpaths = [
    "./tests"
 ]
@@ -52,7 +52,7 @@ profile = "black"
 
 [tool.semantic_release]
 version_variable = [
-    'sqlaurum/_version.py:__version__',
+    'sqlargon/_version.py:__version__',
 ]
 version_toml = 'pyproject.toml:tool.poetry.version'
 version_pattern = [
