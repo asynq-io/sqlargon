@@ -1,5 +1,4 @@
 import re
-from typing import Any
 
 from sqlalchemy.orm import declarative_base, declared_attr
 
@@ -16,8 +15,6 @@ class ORMModel:
     #
     # https://docs.sqlalchemy.org/en/14/orm/extensions/asyncio.html#preventing-implicit-io-when-using-asyncsession
     __mapper_args__ = {"eager_defaults": True}
-
-    __upsert_params__: dict[str, Any] = {}
 
     @declared_attr
     def __tablename__(cls):

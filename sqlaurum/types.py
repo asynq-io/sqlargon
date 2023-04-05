@@ -1,26 +1,17 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, Generic, Protocol, TypeVar
+from typing import Any, Generic, TypeVar
 
 import sqlalchemy as sa
+from pydantic import BaseModel
 from sqlalchemy import CHAR, TypeDecorator
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.sql.type_api import TypeEngine
 
 from .function_elements import json_contains, json_has_all_keys, json_has_any_key
 
-
-class PydanticProtocol(Protocol):
-    @classmethod
-    def parse_obj(cls, obj):
-        ...
-
-    def dict(self, **kwargs) -> dict[str, Any]:
-        ...
-
-
-P = TypeVar("P", bound=PydanticProtocol)
+P = TypeVar("P", bound=BaseModel)
 
 
 class JSON(TypeDecorator):

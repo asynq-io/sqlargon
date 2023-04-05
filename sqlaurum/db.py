@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import functools
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool, Pool
 
 from .repository import SQLAlchemyModelRepository
+from .settings import DatabaseSettings
+from .util import json_dumps, json_loads
 
 
 def configure_repository_class(dialect):
@@ -31,6 +34,8 @@ class Database:
         pool_recycle: int = 1200,
         echo: bool = False,
         echo_pool: bool = True,
+        json_serializer: Callable[[Any], str] = json_dumps,
+        json_deserializer: Callable[[str], Any] = json_loads,
         **kwargs: Any,
     ) -> None:
         self.engine = create_async_engine(
@@ -41,6 +46,8 @@ class Database:
             pool_recycle=pool_recycle,
             echo_pool=echo_pool,
             echo=echo,
+            json_serializer=json_serializer,
+            json_deserializer=json_deserializer,
             **kwargs,
         )
 
@@ -60,3 +67,20 @@ class Database:
             except:  # noqa
                 await session.rollback()
                 raise
+
+    @classmethod
+    def from_settings(cls, settings: DatabaseSettings):
+        return cls(**settings.dict())
+
+    def inject_session(self):
+        def wrapper(func):
+            @functools.wraps(func)
+            async def wrapped(*args, **kwargs):
+                if "session" not in kwargs or kwargs["session"] is None:
+                    async with self.session() as session:
+                        kwargs["session"] = session
+                        return await func(*args, **kwargs)
+
+            return wrapped
+
+        return wrapper
