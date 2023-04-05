@@ -12,8 +12,8 @@ class DatabaseSettings(BaseSettings):
         "sqlalchemy.AsyncAdaptedQueuePool", env="DATABASE_POOL_CLASS"
     )
     json_serializer: PyObject = Field(
-        "anqa.core.utils.json.json_dumps", env="DATABASE_JSON_SERIALIZER"
+        "sqlargon.util.json_dumps", env="DATABASE_JSON_SERIALIZER"
     )
     json_deserializer: PyObject = Field(
-        "anqa.core.utils.json.json_loads", env="DATABASE_JSON_DESERIALIZER"
+        "sqlargon.util.json_loads", env="DATABASE_JSON_DESERIALIZER"
     )

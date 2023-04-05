@@ -1,4 +1,4 @@
-from sqlaurum import Database
+from sqlargon import Database
 
 
 def test_create_database():

@@ -4,8 +4,8 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
-from sqlaurum.function_elements import GenerateUUID
-from sqlaurum.types import GUID
+from sqlargon.function_elements import GenerateUUID
+from sqlargon.types import GUID
 
 
 @pytest.fixture(scope="session")

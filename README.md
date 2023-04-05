@@ -1,11 +1,11 @@
-# SQLAurum
+# SQLArgon
 
-![CI](https://github.com/performancemedia/sqlaurum/workflows/CI/badge.svg)
-![Build](https://github.com/performancemedia/sqlaurum/workflows/Publish/badge.svg)
-![License](https://img.shields.io/github/license/performancemedia/sqlaurum)
-![Python](https://img.shields.io/pypi/pyversions/sqlaurum)
-![Format](https://img.shields.io/pypi/format/sqlaurum)
-![PyPi](https://img.shields.io/pypi/v/sqlaurum)
+![CI](https://github.com/performancemedia/sqlargon/workflows/CI/badge.svg)
+![Build](https://github.com/performancemedia/sqlargon/workflows/Publish/badge.svg)
+![License](https://img.shields.io/github/license/performancemedia/sqlargon)
+![Python](https://img.shields.io/pypi/pyversions/sqlargon)
+![Format](https://img.shields.io/pypi/format/sqlargon)
+![PyPi](https://img.shields.io/pypi/v/sqlargon)
 ![Mypy](https://img.shields.io/badge/mypy-checked-blue)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
 [![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
@@ -29,7 +29,7 @@ from one object which provides somewhat of repository pattern. This solution has
 ```python
 import sqlalchemy as sa
 
-from sqlaurum import UUID, GenerateUUID, Database, Base, SQLAlchemyModelRepository
+from sqlargon import UUID, GenerateUUID, Database, Base, SQLAlchemyModelRepository
 
 db = Database(url=...)
 
@@ -79,7 +79,7 @@ to provide the session object by yourself, by subclassing Manager class e.g.
 ```python
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlaurum import Database, SQLAlchemyModelRepository
+from sqlargon import Database, SQLAlchemyModelRepository
 
 db = Database(url="sqlite+aiosqlite:///:memory:")
 
