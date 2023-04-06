@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sqlargon"
-version = "0.0.2"
+version = "0.0.3"
 description = "SQLAlchemy utils for Postgres and Sqlite"
 readme = "README.md"
 authors = [
@@ -49,6 +49,11 @@ skips = ['B101']
 
 [tool.isort]
 profile = "black"
+
+[tool.mypy]
+python_version = 3.9
+ignore_missing_imports = true
+no_site_packages = true
 
 [tool.semantic_release]
 version_variable = [

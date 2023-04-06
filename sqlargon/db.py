@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 import functools
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Callable
+from typing import Any, AsyncGenerator, Callable, Type
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool, Pool
@@ -13,7 +11,7 @@ from .util import json_dumps, json_loads
 
 
 def configure_repository_class(dialect):
-    if dialect == "postgres":
+    if dialect == "postgresql":
         from .dialects.postgres import configure_postgres_dialect
 
         configure_postgres_dialect(SQLAlchemyModelRepository)
@@ -28,7 +26,7 @@ class Database:
     def __init__(
         self,
         url: str,
-        poolclass: type[Pool] = AsyncAdaptedQueuePool,
+        poolclass: Type[Pool] = AsyncAdaptedQueuePool,
         pool_size: int = 10,
         max_overflow: int = 0,
         pool_recycle: int = 1200,
@@ -59,11 +57,9 @@ class Database:
         configure_repository_class(self.engine.url.get_dialect().name)
 
         if use_depends:
-            from fastapi import Depends
+            from .integrations.fastapi import fastapi_integration
 
-            from .integrations.fastapi import depends_on
-
-            depends_on(Depends(self.session_factory))(SQLAlchemyModelRepository)
+            fastapi_integration(self.session_factory)
 
     async def session_factory(self) -> AsyncGenerator[AsyncSession, None]:
         async with self.session_maker() as session:
@@ -90,6 +86,22 @@ class Database:
                 if "session" not in kwargs or kwargs["session"] is None:
                     async with self.session() as session:
                         kwargs["session"] = session
+                        return await func(*args, **kwargs)
+
+            return wrapped
+
+        return wrapper
+
+    def inject_repository(
+        self, repository_type: Type[SQLAlchemyModelRepository], name: str = "repository"
+    ):
+        def wrapper(func):
+            @functools.wraps(func)
+            async def wrapped(*args, **kwargs):
+                if name not in kwargs or kwargs[name] is None:
+                    async with self.session() as session:
+                        repository = repository_type(session=session)
+                        kwargs[name] = repository
                         return await func(*args, **kwargs)
 
             return wrapped

@@ -13,6 +13,15 @@
 
 *Wrapper around SQLAlchemy async session, core and Postgres native features*
 
+---
+Version: 0.0.3
+
+Documentation: https://performancemedia.github.io/sqlargon/
+
+Repository: https://github.com/performancemedia/sqlargon
+
+---
+
 ## About
 
 This library provides glue code to use sqlalchemy async sessions, core queries and orm models 
