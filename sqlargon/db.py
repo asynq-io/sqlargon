@@ -34,7 +34,6 @@ class Database:
         echo_pool: bool = True,
         json_serializer: Callable[[Any], str] = json_dumps,
         json_deserializer: Callable[[str], Any] = json_loads,
-        use_depends: bool = False,
         **kwargs: Any,
     ) -> None:
         self.engine = create_async_engine(
@@ -55,11 +54,6 @@ class Database:
         )
         self.session = asynccontextmanager(self.session_factory)
         configure_repository_class(self.engine.url.get_dialect().name)
-
-        if use_depends:
-            from .integrations.fastapi import fastapi_integration
-
-            fastapi_integration(self.session_factory)
 
     async def session_factory(self) -> AsyncGenerator[AsyncSession, None]:
         async with self.session_maker() as session:

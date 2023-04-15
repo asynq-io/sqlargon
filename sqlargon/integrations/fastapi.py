@@ -1,19 +1,28 @@
-import inspect
+from typing import Callable, Dict, Generic, Type, TypeVar
 
 from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..db import Database
 from ..repository import SQLAlchemyModelRepository
 
+R = TypeVar("R", bound=SQLAlchemyModelRepository)
 
-def fastapi_integration(factory):
-    old_signature = inspect.signature(SQLAlchemyModelRepository.__init__)  # type: ignore
-    old_parameters: list[inspect.Parameter] = list(old_signature.parameters.values())
-    old_first_parameter = old_parameters[0]
-    old_second_parameter = old_parameters[1]
-    new_first_parameter = old_second_parameter.replace(default=Depends(factory))
-    new_parameters = [old_first_parameter, new_first_parameter] + [
-        parameter.replace(kind=inspect.Parameter.KEYWORD_ONLY)
-        for parameter in old_parameters[2:]
-    ]
-    new_signature = old_signature.replace(parameters=new_parameters)
-    setattr(SQLAlchemyModelRepository.__init__, "__signature__", new_signature)  # type: ignore
+
+class FastapiRepositoryProvider(Generic[R]):
+    def __init__(self, db: Database):
+        self.db = db
+        self._wrappers: Dict[Type[R], Callable[[AsyncSession], R]] = {}
+
+    def __getitem__(self, item: Type[R]) -> Callable[[AsyncSession], R]:
+        if not issubclass(item, SQLAlchemyModelRepository):
+            raise KeyError
+
+        if item not in self._wrappers:
+
+            def wrapped(session: AsyncSession = Depends(self.db.session_factory)) -> R:
+                return item(session=session)
+
+            self._wrappers[item] = wrapped
+
+        return self._wrappers[item]
