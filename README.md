@@ -87,22 +87,23 @@ to provide the session object by yourself, by subclassing Manager class e.g.
 
 ```python
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlargon import Database, SQLAlchemyModelRepository
+from sqlargon import Database
+from sqlargon.integrations.fastapi import FastapiRepositoryProvider
 
-db = Database(url="sqlite+aiosqlite:///:memory:", use_depends=True)
+db = Database(url="sqlite+aiosqlite:///:memory:")
+di = FastapiRepositoryProvider(db)
 
 
 class UserRepository(Repository[User]):
     ...
         
-# then in fastapi
+
 from fastapi import FastAPI
 
 app = FastAPI()
 
 @app.get("/users")
-async def get_users(user_repository: UserRepository = Depends(UserRepository)):
+async def get_users(user_repository: UserRepository = Depends(di[UserRepository])):
     return await user_repository.all()
 
 ```
