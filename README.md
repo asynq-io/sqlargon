@@ -84,11 +84,10 @@ users = await user_repository.select().join(...).filter(
 Manager object needs `sqlalchemy.ext.asyncio.AsyncSession`, but it's possible
 to provide the session object by yourself, by subclassing Manager class e.g.
 
-
 ```python
 from fastapi import Depends
 from sqlargon import Database
-from sqlargon.integrations.fastapi import FastapiRepositoryProvider
+from sqlargon.contrib.fastapi import FastapiRepositoryProvider
 
 db = Database(url="sqlite+aiosqlite:///:memory:")
 di = FastapiRepositoryProvider(db)
@@ -96,11 +95,12 @@ di = FastapiRepositoryProvider(db)
 
 class UserRepository(Repository[User]):
     ...
-        
+
 
 from fastapi import FastAPI
 
 app = FastAPI()
+
 
 @app.get("/users")
 async def get_users(user_repository: UserRepository = Depends(di[UserRepository])):

@@ -10,7 +10,7 @@ from .settings import DatabaseSettings
 from .util import json_dumps, json_loads
 
 
-def configure_repository_class(dialect):
+def configure_repository_class(dialect: str) -> None:
     if dialect == "postgresql":
         from .dialects.postgres import configure_postgres_dialect
 
