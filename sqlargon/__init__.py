@@ -2,7 +2,7 @@ from ._version import __version__
 from .db import Database
 from .function_elements import GenerateUUID
 from .orm import Base, ORMModel
-from .repository import BaseSQLAlchemyRepository, SQLAlchemyModelRepository
+from .repository import SQLAlchemyRepository
 from .types import GUID, JSON, Pydantic
 
 __all__ = [
@@ -11,8 +11,7 @@ __all__ = [
     "Database",
     "GenerateUUID",
     "ORMModel",
-    "BaseSQLAlchemyRepository",
-    "SQLAlchemyModelRepository",
+    "SQLAlchemyRepository",
     "JSON",
     "GUID",
     "Pydantic",

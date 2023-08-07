@@ -1,31 +1,29 @@
-from typing import Callable, Dict, Type
+from typing import Any, Callable, Dict, Type
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import Database
-from ..repository import SQLAlchemyModelRepository
+from ..repository import SQLAlchemyRepository
 
 
 class FastapiRepositoryProvider:
     def __init__(self, db: Database):
         self.db = db
         self._wrappers: Dict[
-            Type[SQLAlchemyModelRepository],
-            Callable[[AsyncSession], SQLAlchemyModelRepository],
+            Type[SQLAlchemyRepository],
+            Callable[[AsyncSession], SQLAlchemyRepository],
         ] = {}
 
-    def __getitem__(
-        self, item: Type[SQLAlchemyModelRepository]
-    ) -> Callable[[AsyncSession], SQLAlchemyModelRepository]:
-        if not issubclass(item, SQLAlchemyModelRepository):
+    def __getitem__(self, item: Type[SQLAlchemyRepository]) -> Any:
+        if not issubclass(item, SQLAlchemyRepository):
             raise KeyError
 
         if item not in self._wrappers:
 
             def wrapped(
                 session: AsyncSession = Depends(self.db.session_factory),
-            ) -> SQLAlchemyModelRepository:
+            ) -> SQLAlchemyRepository:
                 return item(session=session)
 
             self._wrappers[item] = wrapped

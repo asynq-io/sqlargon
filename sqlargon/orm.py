@@ -7,7 +7,7 @@ camel_to_snake = re.compile(r"(?<!^)(?=[A-Z])")
 
 class ORMModel:
     # required in order to access columns with server defaults
-    # or SQL expression defaults, subsequent to a flush, without
+    # or SQL expression defaults, after a flush, without
     # triggering an expired load
     #
     # this allows us to load attributes with a server default after

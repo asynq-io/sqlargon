@@ -5,7 +5,7 @@ from typing import Any, AsyncGenerator, Callable, Type
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool, Pool
 
-from .repository import SQLAlchemyModelRepository
+from .repository import SQLAlchemyRepository
 from .settings import DatabaseSettings
 from .util import json_dumps, json_loads
 
@@ -14,12 +14,12 @@ def configure_repository_class(dialect: str) -> None:
     if dialect == "postgresql":
         from .dialects.postgres import configure_postgres_dialect
 
-        configure_postgres_dialect(SQLAlchemyModelRepository)
+        configure_postgres_dialect(SQLAlchemyRepository)
 
     elif dialect == "sqlite":
         from .dialects.sqlite import configure_sqlite_dialect
 
-        configure_sqlite_dialect(SQLAlchemyModelRepository)
+        configure_sqlite_dialect(SQLAlchemyRepository)
 
 
 class Database:
@@ -87,7 +87,7 @@ class Database:
         return wrapper
 
     def inject_repository(
-        self, repository_type: Type[SQLAlchemyModelRepository], name: str = "repository"
+        self, repository_type: Type[SQLAlchemyRepository], name: str = "repository"
     ):
         def wrapper(func):
             @functools.wraps(func)
