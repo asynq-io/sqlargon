@@ -22,7 +22,6 @@ nav:
   - "SQLArgon": index.md
   - "Alembic Migrations": migrations.md
 
-
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true

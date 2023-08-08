@@ -31,7 +31,7 @@ from one object which provides somewhat of repository pattern. This solution has
 - write data access queries in one place
 - no need to import `insert`,`update`, `delete`, `select` from sqlalchemy over and over again
 - Implicit cast of results to `.scalars().all()` or `.one()`
-- Your view model (e.g. FastAPI routes) does not need to know about the underlying storage. Repository class can be replaced at any moment any object providint similar interface.
+- Your view model (e.g. FastAPI routes) does not need to know about the underlying storage. Repository class can be replaced at any moment any object providing similar interface.
 
 
 ## Installation
