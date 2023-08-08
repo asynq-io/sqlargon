@@ -1,15 +1,37 @@
 from __future__ import annotations
 
+import inspect
 from contextlib import asynccontextmanager
-from typing import Any, Generic, Sequence, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generic,
+    Mapping,
+    Sequence,
+    TypedDict,
+    TypeVar,
+)
 
 import sqlalchemy as sa
+from sqlalchemy import Executable, Result, ScalarResult
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import TypedDict
+from typing_extensions import Self
 
 from .orm import ORMModel
 
+if TYPE_CHECKING:
+    from sqlalchemy.sql import ClauseElement
+    from sqlalchemy.sql._typing import (
+        _ColumnExpressionArgument,
+        _ColumnsClauseArgument,
+        _FromClauseArgument,
+        _OnClauseArgument,
+    )
+
 Model = TypeVar("Model", bound=ORMModel)
+D = TypeVar("D", bound=Any)
+_T = TypeVar("_T", bound=Any)
 
 
 class OnConflict(TypedDict, total=False):
@@ -19,44 +41,171 @@ class OnConflict(TypedDict, total=False):
     where: Any | None
 
 
-class BaseSQLAlchemyRepository:
+class SQLAlchemyRepository(Generic[Model]):
+    __slots__ = ("_query", "_session", "_options")
+
     supports_returning: bool = False
+    supports_on_conflict: bool = False
+
+    model: type[Model]
+    order_by: str | _ColumnExpressionArgument[_T] | None = None
+    default_execution_options: tuple[tuple, dict] = ((), {})
 
     _insert = staticmethod(sa.insert)
     _update = staticmethod(sa.update)
     _delete = staticmethod(sa.delete)
     _select = staticmethod(sa.select)
+    _default_set = None
 
-    def __init__(self, session: AsyncSession | None = None):
+    def __init_subclass__(cls, **kwargs):
+        if not inspect.isabstract(cls):
+            cls.model = cls.__orig_bases__[0].__args__[0]
+            assert cls.model, f"Could not resolve model for {cls.__name__}"
+
+    def __init__(
+        self,
+        session: AsyncSession,
+        query: ClauseElement | Callable = None,
+        _options: tuple[tuple, dict] | None = None,
+    ):
         self._session = session
-        self._stmt: Any = None
+        self._query = query
+        self._options = _options
 
-    def __str__(self) -> str:
-        return repr(self)
+    def with_options(self, *args, **kwargs) -> Self:
+        self._options = (args, kwargs)
+        return self
 
-    def __repr__(self) -> str:
-        return f"<{type(self)}[{self.model}]>"
+    @property
+    def raw_query(self) -> str:
+        return str(self.query)
+
+    def copy(self, query: ClauseElement | Callable) -> Self:
+        return self.__class__(self._session, query, self._options)
+
+    def __call__(self, *args, **kwargs) -> Self:
+        query = self._query(*args, **kwargs)
+        return self.copy(query)
+
+    def __getattr__(self, item: str) -> Self:
+        query = getattr(self._query, item)
+        return self.copy(query)
 
     def __aiter__(self):
-        return self.session.stream_scalars(self._stmt)
+        return self.session.stream_scalars(self.query)
 
-    def __getattr__(self, item):
-        self._stmt = getattr(self._stmt, item)
-        return self
+    @classmethod
+    def _get_default_set(cls) -> set[str]:
+        if cls._default_set is None:
+            pk_columns = {c.name for c in cls.model.__table__.primary_key.columns}
+            cls._default_set = {
+                c.name for c in cls.model.__table__.columns if c.name not in pk_columns
+            }
 
-    def __call__(self, *args, **kwargs):
-        self._stmt = self._stmt(*args, **kwargs)
-        return self
+        return cls._default_set
 
-    def __await__(self):
-        return self.session.execute(self._stmt).__await__()
+    @property
+    def on_conflict(self) -> OnConflict:
+        return {
+            "index_elements": [
+                c.name for c in self.model.__table__.primary_key.columns  # type: ignore[attr-defined]
+            ],
+            "set_": self._get_default_set(),
+        }
+
+    @property
+    def query(self) -> ClauseElement | Executable:
+        return self._query
 
     @property
     def session(self) -> AsyncSession:
-        assert self._session, "Session not set"
+        if self._session is None:
+            raise AttributeError("Session not set")
         return self._session
 
-    async def flush(self, objects=None) -> None:
+    def filter(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> Self:
+        query = self._query or self._select(self.model)
+        if args:
+            query = query.filter(*args)  # type: ignore[union-attr]
+        if kwargs:
+            query = query.filter_by(**kwargs)  # type: ignore[union-attr]
+        return self.copy(query)
+
+    def where(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> Self:
+        return self.filter(*args, **kwargs)
+
+    def select(self, *args: _ColumnsClauseArgument) -> Self:
+        if len(args) == 0:
+            args = (self.model,)
+        query = self._select(*args)
+        if self.order_by:
+            query = query.order_by(self.order_by)
+        return self.copy(query)
+
+    def insert(
+        self,
+        values: Any,
+        return_results: bool = True,
+        ignore_conflicts: bool = False,
+        index_where: _ColumnExpressionArgument[bool] | None = None,
+    ) -> Self:
+        query = self._insert(self.model).values(values)
+        if self.supports_returning and return_results:
+            query = query.returning(self.model)
+
+        if self.supports_on_conflict and ignore_conflicts:
+            query = query.on_conflict_do_nothing(
+                index_elements=self.on_conflict["index_elements"],
+                index_where=index_where,
+            )
+
+        return self.copy(query)
+
+    def upsert(
+        self,
+        values: Any,
+        return_results: bool = False,
+        set_: set[str] | None = None,
+        **kwargs: Any,
+    ) -> Self:
+        if not self.supports_on_conflict:
+            raise TypeError("Upsert is not supported")
+
+        query = self.insert(values, return_results).query
+        kwargs.update(**self.on_conflict)
+        set_ = set_ or self.on_conflict["set_"] or self._get_default_set()
+        kwargs["set_"] = {k: getattr(query.excluded, k) for k in set_}
+        query = query.on_conflict_do_update(**kwargs)
+        return self.copy(query)
+
+    def delete(self, return_results: bool = False) -> Self:
+        query = self._delete(self.model)
+        if self.supports_returning and return_results:
+            query = query.returning(self.model)
+
+        return self.copy(query)
+
+    def join(
+        self,
+        left: _FromClauseArgument,
+        right: _FromClauseArgument,
+        onclause: _OnClauseArgument | None = None,
+        isouter: bool = False,
+        full: bool = False,
+    ) -> Self:
+        query = self._query or self._select(self.model)
+        query = query.join(left, right, onclause=onclause, isouter=isouter, full=full)  # type: ignore[union-attr]
+        return self.copy(query)
+
+    async def count(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> int:
+        query = self._select(sa.func.count()).select_from(self.model)
+        if args:
+            query = query.filter(*args)
+        if kwargs:
+            query = query.filter_by(**kwargs)
+        return (await self.execute_raw(query)).scalar()
+
+    async def flush(self, objects: Sequence | None = None) -> None:
         await self.session.flush(objects)
 
     async def commit(self, raise_on_exception: bool = True) -> None:
@@ -72,160 +221,85 @@ class BaseSQLAlchemyRepository:
         async with self.session.begin():
             yield
 
-    async def execute(self, *args, **kwargs):
-        if len(args) == 0:
-            args = (self._stmt,)
-        return await self.session.execute(*args, **kwargs)
+    async def execute_raw(self, query: Executable, *args, **kwargs) -> Result:
+        return await self.session.execute(query, *args, **kwargs)
 
-    async def scalars(self, *args, **kwargs):
-        return (await self.session.execute(self._stmt, *args, **kwargs)).scalars()
+    async def execute(self) -> Result:
+        args, kwargs = self._options or self.default_execution_options
+        return await self.execute_raw(self.query, *args, **kwargs)
 
-    async def all(self, *args, **kwargs):
-        return (await self.scalars(*args, **kwargs)).all()
+    async def scalar(self) -> Any:
+        return (await self.execute()).scalar()
 
-    async def one(self, *args, **kwargs) -> Model:
-        return (await self.scalars(*args, **kwargs)).one()
+    async def scalars(self) -> ScalarResult:
+        return (await self.execute()).scalars()
 
-    async def one_or_none(self, *args, **kwargs) -> Model | None:
-        return (await self.scalars(*args, **kwargs)).one_or_none()
+    async def all(self) -> Sequence[Model]:
+        return (await self.scalars()).all()
 
-    get = one_or_none
+    async def one(self) -> Model:
+        return (await self.scalars()).one()
 
-    async def mappings(self, *args, **kwargs):
-        return (await self.session.execute(*args, **kwargs)).mappings()
+    async def one_or_none(self) -> Model | None:
+        return (await self.scalars()).one_or_none()
 
-    def update(self, table, values=None, return_results: bool = True, **kwargs):
-        query = self._update(table)
-        if self.supports_returning and return_results:
-            query = query.returning(table)
-        if values:
-            query = query.values(values, **kwargs)
-        self._stmt = query
-        return self
+    async def one_or(self, default: D | None = None) -> Model | D | None:
+        return (await self.one_or_none()) or default
 
-    def insert(
-        self,
-        table=None,
-        values=None,
-        return_results: bool = True,
-        **kwargs,
-    ):
-        query = self._insert(table)
-        if values:
-            query = query.values(values)
-        if self.supports_returning and return_results:
-            query = query.returning(table)
-        self._stmt = query
-        return self
+    async def first(self) -> Model:
+        return (await self.scalars()).first()
 
-    def delete(self, table, *args, **kwargs):
-        query = self._delete(table)
-        if args:
-            query = query.filter(*args)
-        if kwargs:
-            query = query.filter_by(**kwargs)
-        self._stmt = query
-        return self
+    async def get(self, *args, **kwargs) -> Model | None:
+        return await self.filter(*args, **kwargs).one_or_none()
 
-    def select(self, *args, **kwargs):
-        self._stmt = self._select(*args, **kwargs)
-        return self
+    async def create_or_update(self, **kwargs) -> Model:
+        return await self.upsert(kwargs).one()
 
+    async def get_or_create(self, **kwargs) -> Model:
+        return await self.insert(kwargs, ignore_conflicts=True).one()
 
-class SQLAlchemyModelRepository(BaseSQLAlchemyRepository, Generic[Model]):
-    """Base class which provides both SQLAlchemy core (with bound model) and session interfaces"""
+    async def create(self, **kwargs) -> Model:
+        return await self.insert(kwargs).one()
 
-    supports_on_conflict: bool = False
-
-    model: Model
-    order_by: Any | None = None
-
-    def __init_subclass__(cls, **kwargs):
-        if "abstract" not in kwargs:
-            cls.model = cls.__orig_bases__[0].__args__[0]
-            assert cls.model, f"Could not resolve model for {cls}"
-
-    @property
-    def on_conflict(self) -> OnConflict:
-        pk_columns = {c.name for c in self.model.__table__.primary_key.columns}  # type: ignore
-        return {
-            "index_elements": list(pk_columns),
-            "set_": {
-                c.name for c in self.model.__table__.columns if c.name not in pk_columns  # type: ignore
-            },
+    async def save(self, obj: Model) -> None:
+        values = {
+            c.key: getattr(obj, c.key) for c in sa.inspect(obj).mapper.column_attrs
         }
+        await self.upsert(values, return_results=False).execute()
 
-    async def execute(self, *args, **kwargs):
-        if self._stmt is not None:
-            args = (self._stmt, *args)
-        return await super().execute(*args, **kwargs)
+    async def list(self, offset: int | None = None, limit: int | None = None):
+        query = self.query
+        if offset is not None:
+            query = query.offset(offset)
+        if limit is not None:
+            query = query.limit(limit)
+        return await (self.copy(query)).all()
 
-    async def scalars(self, *args, **kwargs):
-        if self._stmt is None:
-            query = self._select(self.model)
-            if self.order_by is not None:
-                query = query.order_by(self.order_by)
-            self._stmt = query
-        return await super().scalars(*args, **kwargs)
+    def paginate(self, limit: int = 100, offset: int = 0) -> Self:
+        query = self.query.limit(limit).offset(offset)
+        return self.copy(query)
 
-    def filter(self, *args, **kwargs):
-        if self._stmt is None:
-            query = self._select(self.model)
-            if self.order_by is not None:
-                query = query.order_by(self.order_by)
-            query = query.filter(*args).filter_by(**kwargs)
-            self._stmt = query
-        return self
+    async def bulk_create_or_update(
+        self, values: Sequence[Mapping], return_results: bool = False
+    ) -> Sequence[Model] | None:
+        q = self.upsert(values, return_results=return_results)
+        if return_results:
+            return await q.all()
+        else:
+            await q.execute()
+        return None
 
-    async def list(self, *args, **kwargs) -> Sequence[Any]:
-        return await self.filter(*args, **kwargs).all()
-
-    def update(self, values=None, **kwargs):  # type: ignore
-        return super().update(self.model, values, **kwargs)
-
-    def insert(self, values=None, return_results: bool = True, ignore_conflicts: bool = False, index_where=None, **kwargs):  # type: ignore[override]
-        super().insert(self.model, values, return_results=return_results, **kwargs)
-
-        if self.supports_on_conflict and ignore_conflicts:
-            self._stmt = self._stmt.on_conflict_do_nothing(
-                index_elements=self.on_conflict["index_elements"],
-                index_where=index_where,
-            )
-        return self
-
-    create = insert
-
-    def delete(self, *args, **kwargs):
-        return super().delete(self.model, *args, **kwargs)
-
-    def select(self, *args, **kwargs):
-        if len(args) == 0:
-            args = (self.model,)
-        self._stmt = self._select(*args, **kwargs)
-        return self
-
-    def upsert(
+    async def bulk_create(
         self,
-        values,
-        return_result: bool = True,
-        set_: set[str] | None = None,
-        **kwargs,
-    ):
-        assert type(
-            self
-        ).supports_on_conflict, f"{type(self).__name__} does not support upsert"
-        self.insert(values, return_result=return_result)
-        kwargs.update(**self.on_conflict)
-        set_ = set_ or self.on_conflict["set_"]
-        if set_:
-            kwargs["set_"] = {k: getattr(self._stmt.excluded, k) for k in set_}
-        self._stmt = self._stmt.on_conflict_do_update(**kwargs)
-        return self
-
-    async def paginate(self, *args, offset: int = 0, limit: int = 100, **kwargs):
-        return await self.filter(*args, **kwargs).offset(offset).limit(limit).all()
-
-    async def retrieve(self, *args, **kwargs) -> Model | None:
-        return await self._filter(*args, **kwargs).one_or_none()
-
-    partial_update = update
+        values: Sequence[Mapping],
+        ignore_conflicts: bool = True,
+        return_results: bool = False,
+    ) -> Sequence[Model] | None:
+        q = self.insert(
+            values, ignore_conflicts=ignore_conflicts, return_results=return_results
+        )
+        if return_results:
+            return await q.all()
+        else:
+            await q.execute()
+        return None

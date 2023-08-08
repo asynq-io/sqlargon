@@ -5,21 +5,26 @@ from typing import Any, AsyncGenerator, Callable, Type
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool, Pool
 
-from .repository import SQLAlchemyModelRepository
+from .repository import SQLAlchemyRepository
 from .settings import DatabaseSettings
 from .util import json_dumps, json_loads
+
+try:
+    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+except ImportError:
+    SQLAlchemyInstrumentor = None
 
 
 def configure_repository_class(dialect: str) -> None:
     if dialect == "postgresql":
         from .dialects.postgres import configure_postgres_dialect
 
-        configure_postgres_dialect(SQLAlchemyModelRepository)
+        configure_postgres_dialect(SQLAlchemyRepository)
 
     elif dialect == "sqlite":
         from .dialects.sqlite import configure_sqlite_dialect
 
-        configure_sqlite_dialect(SQLAlchemyModelRepository)
+        configure_sqlite_dialect(SQLAlchemyRepository)
 
 
 class Database:
@@ -55,6 +60,9 @@ class Database:
         self.session = asynccontextmanager(self.session_factory)
         configure_repository_class(self.engine.url.get_dialect().name)
 
+        if SQLAlchemyInstrumentor is not None:
+            SQLAlchemyInstrumentor().instrument(engine=self.engine.sync_engine)
+
     async def session_factory(self) -> AsyncGenerator[AsyncSession, None]:
         async with self.session_maker() as session:
             try:
@@ -73,21 +81,18 @@ class Database:
         settings = DatabaseSettings(**kwargs)
         return cls.from_settings(settings)
 
-    def inject_session(self):
-        def wrapper(func):
-            @functools.wraps(func)
-            async def wrapped(*args, **kwargs):
-                if "session" not in kwargs or kwargs["session"] is None:
-                    async with self.session() as session:
-                        kwargs["session"] = session
-                        return await func(*args, **kwargs)
+    def inject_session(self, func):
+        @functools.wraps(func)
+        async def wrapped(*args, **kwargs):
+            if "session" not in kwargs or kwargs["session"] is None:
+                async with self.session() as session:
+                    kwargs["session"] = session
+                    return await func(*args, **kwargs)
 
-            return wrapped
-
-        return wrapper
+        return wrapped
 
     def inject_repository(
-        self, repository_type: Type[SQLAlchemyModelRepository], name: str = "repository"
+        self, repository_type: Type[SQLAlchemyRepository], name: str = "repository"
     ):
         def wrapper(func):
             @functools.wraps(func)

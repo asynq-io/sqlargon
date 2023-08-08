@@ -10,17 +10,16 @@ authors = [
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4.0"
 alembic = "^1.10.2"
-asyncpg = "^0.27.0"
+asyncpg = "^0.28.0"
 aiosqlite = "^0.19.0"
 sqlalchemy = "^2.0.8"
-pydantic = ">=1.0"
+pydantic = ">=1.0,<2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
 pytest-asyncio = "^0.20.2"
 pytest-cov = "^4.0.0"
 flake8 = "^6.0.0"
-mypy = "^0.961"
 black = "^22.3.0"
 isort = "^5.10.1"
 tox = "^3.25.0"
@@ -29,6 +28,8 @@ python-semantic-release = "^7.33.2"
 greenlet = "^2.0.2"
 fastapi = "^0.95.0"
 orjson = "^3.8.14"
+mypy = "^1.4.1"
+opentelemetry-instrumentation-sqlalchemy = "^0.40b0"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = "^1.4.2"

@@ -37,8 +37,8 @@ from one object which provides somewhat of repository pattern. This solution has
 
 ```python
 import sqlalchemy as sa
-
-from sqlargon import GUID, GenerateUUID, Database, Base, SQLAlchemyModelRepository
+from sqlalchemy.orm import Mapped
+from sqlargon import GUID, GenerateUUID, Database, Base, SQLAlchemyRepository 
 
 db = Database(url=...)
 
@@ -46,10 +46,10 @@ class User(Base):
         id = sa.Column(
             GUID(), primary_key=True, server_default=GenerateUUID(), nullable=False
         )
-        name = sa.Column(sa.Unicode(255))
+        name: Mapped[str] = sa.Column(sa.Unicode(255))
 
 
-class UserRepository(SQLAlchemyModelRepository[User]):
+class UserRepository(SQLAlchemyRepository[User]):
 
     async def get_user_by_name(self, name: str):
         # custom user function
@@ -59,7 +59,7 @@ user_repository = UserRepository(...)
 
 # select
 await user_repository.all()
-await user_repository.select().where(User.name == "test")
+await user_repository.select().where(User.name == "test", User.id >= 18)
 
 # insert
 user = await user_repository.insert({"name": "test"}).one()
@@ -69,7 +69,7 @@ await user_repository.commit()
 await user_repository.upsert({"name": "John"})
 
 # delete
-await user_repository.delete(name="John")
+await user_repository.delete().filter(name="John").one()
 
 # custom sqlalchemy core functions
 
@@ -85,7 +85,6 @@ Manager object needs `sqlalchemy.ext.asyncio.AsyncSession`, but it's possible
 to provide the session object by yourself, by subclassing Manager class e.g.
 
 ```python
-from fastapi import Depends
 from sqlargon import Database
 from sqlargon.contrib.fastapi import FastapiRepositoryProvider
 
@@ -103,7 +102,7 @@ app = FastAPI()
 
 
 @app.get("/users")
-async def get_users(user_repository: UserRepository = Depends(di[UserRepository])):
+async def get_users(user_repository: UserRepository = di[UserRepository]):
     return await user_repository.all()
 
 ```
