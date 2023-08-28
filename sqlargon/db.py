@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 import functools
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Callable, Type
+from typing import Any, AsyncGenerator, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool, Pool
 
 from .repository import SQLAlchemyRepository
 from .settings import DatabaseSettings
+from .uow import SQLAlchemyUnitOfWork
 from .util import json_dumps, json_loads
 
 try:
@@ -31,7 +34,7 @@ class Database:
     def __init__(
         self,
         url: str,
-        poolclass: Type[Pool] = AsyncAdaptedQueuePool,
+        poolclass: type[Pool] = AsyncAdaptedQueuePool,
         pool_size: int = 10,
         max_overflow: int = 0,
         pool_recycle: int = 1200,
@@ -92,7 +95,7 @@ class Database:
         return wrapped
 
     def inject_repository(
-        self, repository_type: Type[SQLAlchemyRepository], name: str = "repository"
+        self, repository_type: type[SQLAlchemyRepository], name: str = "repository"
     ):
         def wrapper(func):
             @functools.wraps(func)
@@ -102,6 +105,19 @@ class Database:
                         repository = repository_type(session=session)
                         kwargs[name] = repository
                         return await func(*args, **kwargs)
+
+            return wrapped
+
+        return wrapper
+
+    def inject_uow(self, cls: type[SQLAlchemyUnitOfWork], name: str = "uow"):
+        def wrapper(func):
+            @functools.wraps(func)
+            async def wrapped(*args, **kwargs):
+                if name not in kwargs or kwargs[name] is None:
+                    instance = cls(self.session_factory)
+                    kwargs[name] = instance
+                return await func(*args, **kwargs)
 
             return wrapped
 

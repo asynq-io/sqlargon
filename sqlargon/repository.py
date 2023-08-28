@@ -26,6 +26,7 @@ if TYPE_CHECKING:
         _ColumnExpressionArgument,
         _ColumnsClauseArgument,
         _FromClauseArgument,
+        _JoinTargetArgument,
         _OnClauseArgument,
     )
 
@@ -42,7 +43,6 @@ class OnConflict(TypedDict, total=False):
 
 
 class SQLAlchemyRepository(Generic[Model]):
-    __slots__ = ("_query", "_session", "_options")
 
     supports_returning: bool = False
     supports_on_conflict: bool = False
@@ -50,6 +50,7 @@ class SQLAlchemyRepository(Generic[Model]):
     model: type[Model]
     order_by: str | _ColumnExpressionArgument[_T] | None = None
     default_execution_options: tuple[tuple, dict] = ((), {})
+    default_page_size: int = 100
 
     _insert = staticmethod(sa.insert)
     _update = staticmethod(sa.update)
@@ -66,33 +67,30 @@ class SQLAlchemyRepository(Generic[Model]):
         self,
         session: AsyncSession,
         query: ClauseElement | Callable = None,
-        _options: tuple[tuple, dict] | None = None,
     ):
         self._session = session
         self._query = query
-        self._options = _options
-
-    def with_options(self, *args, **kwargs) -> Self:
-        self._options = (args, kwargs)
-        return self
 
     @property
     def raw_query(self) -> str:
         return str(self.query)
 
     def copy(self, query: ClauseElement | Callable) -> Self:
-        return self.__class__(self._session, query, self._options)
+        return self.__class__(self._session, query)
 
     def __call__(self, *args, **kwargs) -> Self:
-        query = self._query(*args, **kwargs)
-        return self.copy(query)
+        self._query = self._query(*args, **kwargs)
+        return self
 
     def __getattr__(self, item: str) -> Self:
-        query = getattr(self._query, item)
-        return self.copy(query)
+        self._query = getattr(self._query, item)
+        return self
 
     def __aiter__(self):
         return self.session.stream_scalars(self.query)
+
+    def __await__(self):
+        return self.execute()
 
     @classmethod
     def _get_default_set(cls) -> set[str]:
@@ -124,7 +122,10 @@ class SQLAlchemyRepository(Generic[Model]):
         return self._session
 
     def filter(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> Self:
-        query = self._query or self._select(self.model)
+        query = self._query
+        if query is None:
+            query = self._select(self.model)
+
         if args:
             query = query.filter(*args)  # type: ignore[union-attr]
         if kwargs:
@@ -138,8 +139,8 @@ class SQLAlchemyRepository(Generic[Model]):
         if len(args) == 0:
             args = (self.model,)
         query = self._select(*args)
-        if self.order_by:
-            query = query.order_by(self.order_by)
+        if type(self).order_by is not None:
+            query = query.order_by(type(self).order_by)
         return self.copy(query)
 
     def insert(
@@ -171,10 +172,18 @@ class SQLAlchemyRepository(Generic[Model]):
         if not self.supports_on_conflict:
             raise TypeError("Upsert is not supported")
 
-        query = self.insert(values, return_results).query
+        query = self._insert(self.model).values(values)
+        if self.supports_returning and return_results:
+            query = query.returning(self.model)
         kwargs.update(**self.on_conflict)
-        set_ = set_ or self.on_conflict["set_"] or self._get_default_set()
-        kwargs["set_"] = {k: getattr(query.excluded, k) for k in set_}
+        if set_ is None:
+            if isinstance(values, Mapping):
+                pk_columns = {c.name for c in self.model.__table__.primary_key.columns}  # type: ignore[attr-defined]
+                set_ = {k for k in values.keys() if k not in pk_columns}
+            else:
+                set_ = self.on_conflict.get("set_", self._get_default_set())
+        if set_:
+            kwargs["set_"] = {k: getattr(query.excluded, k) for k in set_}
         query = query.on_conflict_do_update(**kwargs)
         return self.copy(query)
 
@@ -187,6 +196,7 @@ class SQLAlchemyRepository(Generic[Model]):
 
     def join(
         self,
+        target: _JoinTargetArgument,
         left: _FromClauseArgument,
         right: _FromClauseArgument,
         onclause: _OnClauseArgument | None = None,
@@ -194,8 +204,13 @@ class SQLAlchemyRepository(Generic[Model]):
         full: bool = False,
     ) -> Self:
         query = self._query or self._select(self.model)
-        query = query.join(left, right, onclause=onclause, isouter=isouter, full=full)  # type: ignore[union-attr]
+        query = query.join(target, left, right, onclause=onclause, isouter=isouter, full=full)  # type: ignore[union-attr]
         return self.copy(query)
+
+    def page(self, n: int = 1, page_size: int | None = None):
+        page_size = page_size or type(self).default_page_size
+        offset = (n - 1) * page_size
+        return self.select().offset(offset).limit(page_size)
 
     async def count(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> int:
         query = self._select(sa.func.count()).select_from(self.model)
@@ -203,7 +218,7 @@ class SQLAlchemyRepository(Generic[Model]):
             query = query.filter(*args)
         if kwargs:
             query = query.filter_by(**kwargs)
-        return (await self.execute_raw(query)).scalar()
+        return (await self.execute_query(query)).scalar()
 
     async def flush(self, objects: Sequence | None = None) -> None:
         await self.session.flush(objects)
@@ -221,12 +236,14 @@ class SQLAlchemyRepository(Generic[Model]):
         async with self.session.begin():
             yield
 
-    async def execute_raw(self, query: Executable, *args, **kwargs) -> Result:
+    async def execute_query(self, query: Executable, *args, **kwargs) -> Result:
+        if not args or kwargs:
+            args, kwargs = type(self).default_execution_options
         return await self.session.execute(query, *args, **kwargs)
 
     async def execute(self) -> Result:
-        args, kwargs = self._options or self.default_execution_options
-        return await self.execute_raw(self.query, *args, **kwargs)
+        args, kwargs = type(self).default_execution_options
+        return await self.execute_query(self.query, *args, **kwargs)
 
     async def scalar(self) -> Any:
         return (await self.execute()).scalar()
@@ -261,28 +278,41 @@ class SQLAlchemyRepository(Generic[Model]):
     async def create(self, **kwargs) -> Model:
         return await self.insert(kwargs).one()
 
-    async def save(self, obj: Model) -> None:
-        values = {
-            c.key: getattr(obj, c.key) for c in sa.inspect(obj).mapper.column_attrs
-        }
-        await self.upsert(values, return_results=False).execute()
+    async def add(self, obj: Model, flush: bool = True) -> None:
+        self.session.add(obj)
+        if flush:
+            await self.session.flush()
+
+    async def remove(self, *args, **kwargs) -> None:
+        await self.delete().filter(*args, **kwargs).execute()
+
+    async def delete_one(self, *args, **kwargs) -> Model | None:
+        return (
+            await self.delete(return_results=True).filter(*args, **kwargs).one_or_none()
+        )
+
+    async def delete_many(self, *args, **kwargs) -> Sequence[Model]:
+        return await self.delete(return_results=True).filter(*args, **kwargs).all()
 
     async def list(self, offset: int | None = None, limit: int | None = None):
-        query = self.query
+        query = self._select(self.model)
         if offset is not None:
             query = query.offset(offset)
         if limit is not None:
             query = query.limit(limit)
-        return await (self.copy(query)).all()
-
-    def paginate(self, limit: int = 100, offset: int = 0) -> Self:
-        query = self.query.limit(limit).offset(offset)
-        return self.copy(query)
+        if type(self).order_by is not None:
+            query = query.order_by(type(self).order_by)
+        self._query = query
+        return await self.all()
 
     async def bulk_create_or_update(
-        self, values: Sequence[Mapping], return_results: bool = False
+        self,
+        values: Sequence[Mapping],
+        return_results: bool = False,
+        set_: set[str] | None = None,
+        **kwargs: Any,
     ) -> Sequence[Model] | None:
-        q = self.upsert(values, return_results=return_results)
+        q = self.upsert(values, return_results=return_results, set_=set_, **kwargs)
         if return_results:
             return await q.all()
         else:
