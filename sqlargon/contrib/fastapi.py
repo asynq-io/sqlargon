@@ -24,7 +24,7 @@ class FastapiRepositoryProvider:
             def wrapped(
                 session: AsyncSession = Depends(self.db.session_factory),
             ) -> SQLAlchemyRepository:
-                return item(session=session)
+                return item(session)
 
             self._wrappers[item] = wrapped
 
