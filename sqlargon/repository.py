@@ -275,10 +275,15 @@ class SQLAlchemyRepository(Generic[Model]):
         return await self.filter(*args, **kwargs).one_or_none()
 
     async def create_or_update(self, **kwargs) -> Model:
-        return await self.upsert(kwargs).one()
+        return await self.upsert(kwargs, return_results=True).one()
 
     async def get_or_create(self, **kwargs) -> Model:
         return await self.insert(kwargs, ignore_conflicts=True).one()
+
+    async def create_if_not_exists(self, **kwargs) -> Model:
+        return await self.insert(
+            kwargs, ignore_conflicts=True, return_results=True
+        ).one()
 
     async def create(self, **kwargs) -> Model:
         return await self.insert(kwargs).one()
