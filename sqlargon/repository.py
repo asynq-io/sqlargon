@@ -113,6 +113,11 @@ class SQLAlchemyRepository(Generic[Model]):
 
     @property
     def query(self) -> ClauseElement | Executable:
+        if self._query is None:
+            query = self._select(self.model)
+            if type(self).order_by:
+                query = query.order_by(type(self).order_by)
+            self._query = query
         return self._query
 
     @property
