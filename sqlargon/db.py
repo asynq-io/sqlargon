@@ -115,7 +115,7 @@ class Database:
             @functools.wraps(func)
             async def wrapped(*args, **kwargs):
                 if name not in kwargs or kwargs[name] is None:
-                    instance = cls(self.session_factory)
+                    instance = cls(self.session_maker)
                     kwargs[name] = instance
                 return await func(*args, **kwargs)
 
