@@ -288,9 +288,12 @@ class SQLAlchemyRepository(Generic[Model]):
     async def create_or_update(self, **kwargs) -> Model:
         return await self.upsert(kwargs, return_results=True).one()
 
-    async def get_or_create(self, defaults: Mapping | None = None, **kwargs) -> Model:
+    async def get_or_create(
+        self, defaults: dict[str, Any] | None = None, **kwargs
+    ) -> Model:
         defaults = defaults or {}
-        obj = await self.insert(defaults | kwargs, ignore_conflicts=True).one_or_none()
+        defaults.update(kwargs)
+        obj = await self.insert(defaults, ignore_conflicts=True).one_or_none()
         if obj is None:
             obj = await self.filter(**kwargs).one()
         return obj
