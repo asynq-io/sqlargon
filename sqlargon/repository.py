@@ -6,6 +6,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Coroutine,
     Generic,
     Mapping,
     Sequence,
@@ -15,7 +16,7 @@ from typing import (
 
 import sqlalchemy as sa
 from sqlalchemy import Executable, Result, ScalarResult
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncScalarResult, AsyncSession
 from typing_extensions import Self
 
 from .orm import ORMModel
@@ -59,7 +60,7 @@ class SQLAlchemyRepository(Generic[Model]):
     _default_set = None
 
     def __init_subclass__(cls, **kwargs):
-        if not inspect.isabstract(cls):
+        if not (inspect.isabstract(cls) or hasattr(cls, "model")):
             cls.model = cls.__orig_bases__[0].__args__[0]
             assert cls.model, f"Could not resolve model for {cls.__name__}"
 
@@ -86,10 +87,10 @@ class SQLAlchemyRepository(Generic[Model]):
         self._query = getattr(self._query, item)
         return self
 
-    def __aiter__(self):
+    def __aiter__(self) -> Coroutine[Any, Any, AsyncScalarResult[Any]]:
         return self.session.stream_scalars(self.query)
 
-    def __await__(self):
+    def __await__(self) -> Coroutine[Any, Any, Result]:
         return self.execute()
 
     @classmethod
@@ -192,6 +193,12 @@ class SQLAlchemyRepository(Generic[Model]):
         query = query.on_conflict_do_update(**kwargs)
         return self.copy(query)
 
+    def update(self, values: Any, return_results: bool = False) -> Self:
+        query = self._update(self.model).values(values)
+        if self.supports_returning and return_results:
+            query = query.returning(self.model)
+        return self.copy(query)
+
     def delete(self, return_results: bool = False) -> Self:
         query = self._delete(self.model)
         if self.supports_returning and return_results:
@@ -212,10 +219,10 @@ class SQLAlchemyRepository(Generic[Model]):
         query = query.join(target, left, right, onclause=onclause, isouter=isouter, full=full)  # type: ignore[union-attr]
         return self.copy(query)
 
-    def page(self, n: int = 1, page_size: int | None = None):
+    def page(self, n: int = 1, page_size: int | None = None) -> Self:
         page_size = page_size or type(self).default_page_size
         offset = (n - 1) * page_size
-        return self.select().offset(offset).limit(page_size)
+        return self.select().offset(offset).limit(page_size)  # type: ignore[return-value]
 
     async def count(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> int:
         query = self._select(sa.func.count()).select_from(self.model)
@@ -237,9 +244,13 @@ class SQLAlchemyRepository(Generic[Model]):
                 raise
 
     @asynccontextmanager
-    async def transaction(self):
-        async with self.session.begin():
-            yield
+    async def transaction(self, nested: bool = True):
+        if nested:
+            async with self.session.begin_nested():
+                yield
+        else:
+            async with self.session.begin():
+                yield
 
     async def execute_query(self, query: Executable, *args, **kwargs) -> Result:
         if not args or kwargs:
@@ -277,16 +288,20 @@ class SQLAlchemyRepository(Generic[Model]):
     async def create_or_update(self, **kwargs) -> Model:
         return await self.upsert(kwargs, return_results=True).one()
 
-    async def get_or_create(self, **kwargs) -> Model:
-        return await self.insert(kwargs, ignore_conflicts=True).one()
+    async def get_or_create(
+        self, defaults: dict[str, Any] | None = None, **kwargs
+    ) -> Model:
+        defaults = defaults or {}
+        defaults.update(kwargs)
+        obj = await self.insert(defaults, ignore_conflicts=True).one_or_none()
+        if obj is None:
+            obj = await self.filter(**kwargs).one()
+        return obj
 
-    async def create_if_not_exists(self, **kwargs) -> Model:
+    async def create(self, **kwargs) -> Model | None:
         return await self.insert(
             kwargs, ignore_conflicts=True, return_results=True
-        ).one()
-
-    async def create(self, **kwargs) -> Model:
-        return await self.insert(kwargs).one()
+        ).one_or_none()
 
     async def add(self, obj: Model, flush: bool = True) -> None:
         self.session.add(obj)

@@ -13,7 +13,7 @@
 *Wrapper around SQLAlchemy async session, core and native features for Postgres/SQLite*
 
 ---
-Version: 0.1.3
+Version: 0.2.0
 
 Docs: [https://performancemedia.github.io/sqlargon/](https://performancemedia.github.io/sqlargon/)
 
@@ -24,7 +24,7 @@ Repository: [https://github.com/performancemedia/sqlargon](https://github.com/pe
 
 ## About
 
-This library provides glue code to use sqlalchemy async sessions, core queries and orm models 
+This library provides glue code to use sqlalchemy async sessions, core queries and orm models
 from one object which provides somewhat of repository pattern. This solution has few advantages:
 
 - no need to pass `session` object to every function/method. It is stored (and optionally injected) in repository object

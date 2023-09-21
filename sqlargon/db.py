@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import AsyncAdaptedQueuePool, Pool
 
 from .repository import SQLAlchemyRepository
 from .settings import DatabaseSettings
@@ -34,24 +33,12 @@ class Database:
     def __init__(
         self,
         url: str,
-        poolclass: type[Pool] = AsyncAdaptedQueuePool,
-        pool_size: int = 10,
-        max_overflow: int = 0,
-        pool_recycle: int = 1200,
-        echo: bool = False,
-        echo_pool: bool = True,
         json_serializer: Callable[[Any], str] = json_dumps,
         json_deserializer: Callable[[str], Any] = json_loads,
         **kwargs: Any,
     ) -> None:
         self.engine = create_async_engine(
             url=url,
-            poolclass=poolclass,
-            pool_size=pool_size,
-            max_overflow=max_overflow,
-            pool_recycle=pool_recycle,
-            echo_pool=echo_pool,
-            echo=echo,
             json_serializer=json_serializer,
             json_deserializer=json_deserializer,
             **kwargs,
@@ -95,14 +82,14 @@ class Database:
         return wrapped
 
     def inject_repository(
-        self, repository_type: type[SQLAlchemyRepository], name: str = "repository"
+        self, cls: type[SQLAlchemyRepository], name: str = "repository"
     ):
         def wrapper(func):
             @functools.wraps(func)
             async def wrapped(*args, **kwargs):
                 if name not in kwargs or kwargs[name] is None:
                     async with self.session() as session:
-                        repository = repository_type(session=session)
+                        repository = cls(session=session)
                         kwargs[name] = repository
                         return await func(*args, **kwargs)
 

@@ -1,11 +1,13 @@
+from uuid import uuid4
+
 import pytest
 import pytest_asyncio
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
-from sqlargon.function_elements import GenerateUUID
-from sqlargon.types import GUID
+from sqlargon import SQLAlchemyRepository
+from sqlargon.types import GUID, GenerateUUID
 
 
 @pytest.fixture(scope="session")
@@ -50,8 +52,8 @@ async def user_model(engine):
 
 
 @pytest.fixture()
-def user_repository_class(user_model, repo_cls):
-    class UserRepository(repo_cls[user_model]):
+def user_repository_class(user_model):
+    class UserRepository(SQLAlchemyRepository[user_model]):
         @property
         def on_conflict(self):
             return {"set_": {"name"}, "index_elements": ["id"]}
@@ -62,3 +64,8 @@ def user_repository_class(user_model, repo_cls):
 @pytest_asyncio.fixture()
 async def user_repository(user_repository_class, session):
     yield user_repository_class(session)
+
+
+@pytest.fixture
+def user_data():
+    return {"id": uuid4(), "name": "John"}
