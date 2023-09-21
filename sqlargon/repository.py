@@ -293,23 +293,16 @@ class SQLAlchemyRepository(Generic[Model]):
     ) -> Model:
         defaults = defaults or {}
         defaults.update(kwargs)
-        q = self.insert(defaults, ignore_conflicts=True)
-        if self.supports_returning:
-            obj = await q.one_or_none()
-            if obj is None:
-                obj = await self.filter(**kwargs).one()
-        else:
-            await q.execute()
-            return await self.select().filter(**kwargs).one()
+        obj = await self.insert(defaults, ignore_conflicts=True).one_or_none()
+        if obj is None:
+            obj = await self.filter(**kwargs).one()
         return obj
 
     async def create(self, **kwargs) -> Model | None:
-        query = self.insert(kwargs, ignore_conflicts=True, return_results=True)
-        if self.supports_returning:
-            return await query.one_or_none()
-        else:
-            await query.execute()
-            return await self.select().filter(**kwargs).one_or_none()
+        self.insert(kwargs, ignore_conflicts=True, return_results=True)
+        return await self.insert(
+            kwargs, ignore_conflicts=True, return_results=True
+        ).one_or_none()
 
     async def add(self, obj: Model, flush: bool = True) -> None:
         self.session.add(obj)
