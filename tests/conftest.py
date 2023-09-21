@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import pytest
 import pytest_asyncio
 import sqlalchemy as sa
@@ -62,3 +64,8 @@ def user_repository_class(user_model):
 @pytest_asyncio.fixture()
 async def user_repository(user_repository_class, session):
     yield user_repository_class(session)
+
+
+@pytest.fixture
+def user_data():
+    return {"id": uuid4(), "name": "John"}

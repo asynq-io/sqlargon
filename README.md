@@ -65,8 +65,8 @@ await user_repository.select().where(User.name == "test", User.id >= 18)
 user = await user_repository.insert({"name": "test"}).one()
 
 await user_repository.commit()
-# upsert
-await user_repository.upsert({"name": "John"})
+
+
 
 # delete
 await user_repository.delete().filter(name="John").one()
