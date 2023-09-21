@@ -299,7 +299,6 @@ class SQLAlchemyRepository(Generic[Model]):
         return obj
 
     async def create(self, **kwargs) -> Model | None:
-        self.insert(kwargs, ignore_conflicts=True, return_results=True)
         return await self.insert(
             kwargs, ignore_conflicts=True, return_results=True
         ).one_or_none()
