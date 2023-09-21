@@ -39,6 +39,10 @@ class CreatedUpdatedMixin:
             server_onupdate=FetchedValue(),
         )
 
+    @hybrid_property
+    def is_new(self):
+        return self.created_at == self.updated_at
+
 
 @declarative_mixin
 class SoftDeleteMixin:
