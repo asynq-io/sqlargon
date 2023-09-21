@@ -24,7 +24,7 @@ Repository: [https://github.com/performancemedia/sqlargon](https://github.com/pe
 
 ## About
 
-This library provides glue code to use sqlalchemy async sessions, core queries and orm models 
+This library provides glue code to use sqlalchemy async sessions, core queries and orm models
 from one object which provides somewhat of repository pattern. This solution has few advantages:
 
 - no need to pass `session` object to every function/method. It is stored (and optionally injected) in repository object

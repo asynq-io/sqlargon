@@ -1,12 +1,14 @@
+from datetime import datetime, timezone
+
 import sqlalchemy as sa
 from sqlalchemy import FetchedValue
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import declared_attr
+from sqlalchemy.orm import declarative_mixin, declared_attr
 
-from .function_elements import GenerateUUID
-from .types import GUID
+from .types import GUID, GenerateUUID, Timestamp, now
 
 
+@declarative_mixin
 class UUIDModelMixin:
     @declared_attr
     def id(cls):
@@ -15,26 +17,36 @@ class UUIDModelMixin:
         )
 
 
+@declarative_mixin
 class CreatedUpdatedMixin:
     @declared_attr
     def created_at(cls):
-        return sa.Column(sa.DateTime, server_default=sa.func.now(), nullable=False)
+        return sa.Column(
+            Timestamp(),
+            server_default=now(),
+            default=lambda: datetime.now(tz=timezone.utc),
+            nullable=False,
+        )
 
     @declared_attr
     def updated_at(cls):
         return sa.Column(
-            sa.DateTime,
-            server_default=sa.func.now(),
-            onupdate=sa.func.now(),
+            Timestamp(),
+            server_default=now(),
+            onupdate=now(),
+            default=lambda: datetime.now(tz=timezone.utc),
             nullable=False,
             server_onupdate=FetchedValue(),
         )
 
 
+@declarative_mixin
 class SoftDeleteMixin:
     @declared_attr
     def tombstone(cls):
-        return sa.Column(sa.Boolean(), default=False)
+        return sa.Column(
+            sa.Boolean(), nullable=False, default=False, server_default=sa.sql.false()
+        )
 
     @hybrid_property
     def not_deleted(self):

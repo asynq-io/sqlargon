@@ -1,51 +1,9 @@
-from __future__ import annotations
-
-import json
-
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+from sqlalchemy import BOOLEAN, FunctionElement, TypeDecorator
+from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.sql.functions import FunctionElement
-from sqlalchemy.sql.sqltypes import BOOLEAN
 
-
-class GenerateUUID(FunctionElement):
-    name = "uuid_default"
-
-
-@compiles(GenerateUUID, "postgresql")
-@compiles(GenerateUUID)
-def _generate_uuid_postgresql(element, compiler, **kwargs) -> str:
-    """
-    Generates a random UUID in Postgres; requires the pgcrypto extension.
-    """
-
-    return "(GEN_RANDOM_UUID())"
-
-
-@compiles(GenerateUUID, "sqlite")
-def _generate_uuid_sqlite(element, compiler, **kwargs) -> str:
-    """
-    Generates a random UUID in other databases (SQLite) by concatenating
-    bytes in a way that approximates a UUID hex representation. This is
-    sufficient for our purposes of having a random client-generated ID
-    that is compatible with a UUID spec.
-    """
-
-    return """
-    (
-        lower(hex(randomblob(4)))
-        || '-'
-        || lower(hex(randomblob(2)))
-        || '-4'
-        || substr(lower(hex(randomblob(2))),2)
-        || '-'
-        || substr('89ab',abs(random()) % 4 + 1, 1)
-        || substr(lower(hex(randomblob(2))),2)
-        || '-'
-        || lower(hex(randomblob(6)))
-    )
-    """
+from ..util import json_dumps
 
 
 class json_contains(FunctionElement):
@@ -57,7 +15,7 @@ class json_contains(FunctionElement):
     https://www.postgresql.org/docs/current/functions-json.html
     """
 
-    type = BOOLEAN  # type: ignore
+    type = BOOLEAN
     name = "json_contains"
     inherit_cache = False
 
@@ -79,10 +37,10 @@ def _json_contains_postgresql(element, compiler, **kwargs):
 
 def _json_contains_sqlite_fn(left, right, compiler, **kwargs):
     if isinstance(left, (list, dict, tuple, str)):
-        left = json.dumps(left)
+        left = json_dumps(left)
 
     if isinstance(right, (list, dict, tuple, str)):
-        right = json.dumps(right)
+        right = json_dumps(right)
 
     json_each_left = sa.func.json_each(left).alias("left")
     json_each_right = sa.func.json_each(right).alias("right")
@@ -207,3 +165,34 @@ def _json_has_all_keys_sqlite(element, compiler, **kwargs):
         compiler=compiler,
         **kwargs,
     )
+
+
+class JSON(TypeDecorator):
+    """
+    JSON type that returns SQLAlchemy's dialect-specific JSON types, where
+    possible. Uses generic JSON otherwise.
+
+    The "base" type is postgresql.JSONB to expose useful methods prior
+    to SQL compilation
+    """
+
+    impl = postgresql.JSONB
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(postgresql.JSONB(none_as_null=True))
+        elif dialect.name == "sqlite":
+            return dialect.type_descriptor(sqlite.JSON(none_as_null=True))
+        else:
+            return dialect.type_descriptor(sa.JSON(none_as_null=True))
+
+    class comparator_factory(sa.JSON.Comparator):
+        def contains(self, other, **kw):
+            json_contains(self, other)
+
+        def has_any_key(self, other):
+            return json_has_any_key(self, other)
+
+        def has_all_keys(self, other):
+            return json_has_all_keys(self, other)

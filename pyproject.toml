@@ -13,7 +13,6 @@ alembic = "^1.10.2"
 asyncpg = "^0.28.0"
 aiosqlite = "^0.19.0"
 sqlalchemy = "^2.0.8"
-pydantic = ">=1.0,<2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
@@ -52,9 +51,32 @@ skips = ['B101']
 profile = "black"
 
 [tool.mypy]
-python_version = 3.9
+namespace_packages = true
 ignore_missing_imports = true
 no_site_packages = true
+
+[tool.ruff]
+select = [
+    "B",  # flake8-bugbear
+    "C",  # flake8-comprehensions
+    "E",  # pycodestyle errors
+    "F",  # pyflakes
+    "W",  # pycodestyle warnings
+#    "I",  # isort
+]
+
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+]
+
+line-length = 88
+# comment this line if you have imported tasks/models unused
+
+#unfixable = ["F401"]
+
+[tool.ruff.mccabe]
+max-complexity = 10
 
 [tool.semantic_release]
 version_variable = [

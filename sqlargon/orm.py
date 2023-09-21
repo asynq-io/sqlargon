@@ -1,5 +1,6 @@
 import re
 
+from sqlalchemy import MetaData
 from sqlalchemy.orm import declarative_base, declared_attr
 
 camel_to_snake = re.compile(r"(?<!^)(?=[A-Z])")
@@ -26,4 +27,14 @@ class ORMModel:
         return camel_to_snake.sub("_", cls.__name__).lower()
 
 
-Base = declarative_base(cls=ORMModel)
+naming_convention = {
+    "ix": "ix_%(table_name)s__%(column_0_N_name)s",
+    "uq": "uq_%(table_name)s__%(column_0_N_name)s",
+    "ck": "ck_%(table_name)s__%(constraint_name)s",
+    "fk": "fk_%(table_name)s__%(column_0_N_name)s__%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+Base = declarative_base(
+    cls=ORMModel, metadata=MetaData(naming_convention=naming_convention)
+)
