@@ -7,6 +7,7 @@ from typing import (
     Any,
     Callable,
     Coroutine,
+    Generator,
     Generic,
     Mapping,
     Sequence,
@@ -90,8 +91,8 @@ class SQLAlchemyRepository(Generic[Model]):
     def __aiter__(self) -> Coroutine[Any, Any, AsyncScalarResult[Any]]:
         return self.session.stream_scalars(self.query)
 
-    def __await__(self) -> Coroutine[Any, Any, Result]:
-        return self.execute()
+    def __await__(self) -> Generator[Any, None, Result]:
+        return self.execute().__await__()
 
     @classmethod
     def _get_default_set(cls) -> set[str]:
