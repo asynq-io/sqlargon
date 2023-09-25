@@ -16,7 +16,7 @@ from typing import (
 )
 
 import sqlalchemy as sa
-from sqlalchemy import Executable, Result, ScalarResult, bindparam
+from sqlalchemy import Executable, MappingResult, Result, ScalarResult, bindparam
 from sqlalchemy.ext.asyncio import AsyncScalarResult, AsyncSession
 from typing_extensions import Self
 
@@ -261,6 +261,9 @@ class SQLAlchemyRepository(Generic[Model]):
     async def execute(self) -> Result:
         args, kwargs = type(self).default_execution_options
         return await self.execute_query(self.query, *args, **kwargs)
+
+    async def mappings(self) -> MappingResult:
+        return (await self.execute()).mappings()
 
     async def scalar(self) -> Any:
         return (await self.execute()).scalar()
