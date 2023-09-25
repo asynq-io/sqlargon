@@ -14,7 +14,7 @@
 *Wrapper around SQLAlchemy async session, core and Postgres native features*
 
 ---
-Version: 0.2.1
+Version: 0.2.2
 
 Documentation: https://performancemedia.github.io/sqlargon/
 
