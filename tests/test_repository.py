@@ -26,3 +26,20 @@ async def test_create_safe(user_repository, user_data):
     assert user1.id == user_data["id"]
     user2 = await user_repository.create(**user_data)
     assert user2 is None
+
+
+async def test_bulk_update(user_repository):
+    users = [
+        {"name": "John"},
+        {"name": "Vincent"},
+        {"name": "Andrew"},
+    ]
+    users_update = [
+        {"name": "John", "last_name": "Connor"},
+        {"name": "Vincent", "last_name": "Carter"},
+    ]
+    await user_repository.insert(users)
+    await user_repository.bulk_update(values=users_update, on_={"name"})
+    assert 2 == await user_repository.count(
+        user_repository.model.last_name.in_(("Connor", "Carter"))
+    )

@@ -44,6 +44,7 @@ async def user_model(engine):
             GUID(), primary_key=True, server_default=GenerateUUID(), nullable=False
         )
         name = sa.Column(sa.Unicode(255))
+        last_name = sa.Column(sa.Unicode(255), nullable=True)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

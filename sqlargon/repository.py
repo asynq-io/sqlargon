@@ -16,7 +16,7 @@ from typing import (
 )
 
 import sqlalchemy as sa
-from sqlalchemy import Executable, Result, ScalarResult
+from sqlalchemy import Executable, Result, ScalarResult, bindparam
 from sqlalchemy.ext.asyncio import AsyncScalarResult, AsyncSession
 from typing_extensions import Self
 
@@ -359,3 +359,13 @@ class SQLAlchemyRepository(Generic[Model]):
         else:
             await q.execute()
         return None
+
+    async def bulk_update(self, values: Sequence[dict[str, Any]], on_: set[str], *args):
+        where = [getattr(self.model, field) == bindparam(f"u_{field}") for field in on_]
+        values = [
+            {key if key not in on_ else f"u_{key}": value for key, value in row.items()}
+            for row in values
+        ]
+
+        connection = await self.session.connection()
+        await connection.execute(self._update(self.model).where(*args, *where), values)
