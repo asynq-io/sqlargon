@@ -64,7 +64,7 @@ class Database:
 
     @classmethod
     def from_settings(cls, settings: DatabaseSettings):
-        return cls(**settings.dict())
+        return cls(**settings.to_kwargs())
 
     @classmethod
     def from_env(cls, **kwargs):

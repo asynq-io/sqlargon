@@ -34,3 +34,4 @@ tmp/
 site/
 # mypy
 .mypy_cache
+tmp.db
