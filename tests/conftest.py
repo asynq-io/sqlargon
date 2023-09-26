@@ -3,38 +3,25 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
-from sqlargon import SQLAlchemyRepository
+from sqlargon import Database, SQLAlchemyRepository
 from sqlargon.types import GUID, GenerateUUID
 
 
 @pytest.fixture(scope="session")
-def engine():
-    return create_async_engine("sqlite+aiosqlite:///:memory:")
-
-
-@pytest_asyncio.fixture(scope="session")
-def session_factory(engine):
-    return async_sessionmaker(engine, expire_on_commit=False)
+def db():
+    return Database.from_env()
 
 
 @pytest_asyncio.fixture(scope="function")
-async def session(session_factory):
-    async with session_factory() as db_session:
-        try:
-            yield db_session
-            await db_session.commit()
-        except:  # noqa
-            await db_session.rollback()
-            raise
-        finally:
-            await db_session.close()
+async def session(db: Database):
+    async with db.session() as db_session:
+        yield db_session
 
 
 @pytest_asyncio.fixture(scope="function")
-async def user_model(engine):
+async def user_model(db):
 
     Base = declarative_base()
 
@@ -46,7 +33,7 @@ async def user_model(engine):
         name = sa.Column(sa.Unicode(255))
         last_name = sa.Column(sa.Unicode(255), nullable=True)
 
-    async with engine.begin() as conn:
+    async with db.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         yield User
         await conn.run_sync(Base.metadata.drop_all)
