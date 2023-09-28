@@ -189,7 +189,7 @@ class JSON(TypeDecorator):
 
     class comparator_factory(sa.JSON.Comparator):
         def contains(self, other, **kw):
-            json_contains(self, other)
+            return json_contains(self, other)
 
         def has_any_key(self, other):
             return json_has_any_key(self, other)
