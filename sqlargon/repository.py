@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     from sqlalchemy.sql._typing import (
         _ColumnExpressionArgument,
         _ColumnsClauseArgument,
-        _FromClauseArgument,
         _JoinTargetArgument,
         _OnClauseArgument,
     )
@@ -210,20 +209,29 @@ class SQLAlchemyRepository(Generic[Model]):
     def join(
         self,
         target: _JoinTargetArgument,
-        left: _FromClauseArgument,
-        right: _FromClauseArgument,
         onclause: _OnClauseArgument | None = None,
+        *,
         isouter: bool = False,
         full: bool = False,
-    ) -> Self:
-        query = self._query or self._select(self.model)
-        query = query.join(target, left, right, onclause=onclause, isouter=isouter, full=full)  # type: ignore[union-attr]
+    ):
+        query = self.query.join(target, onclause, isouter=isouter, full=full)  # type: ignore[attr-defined]
         return self.copy(query)
 
     def page(self, n: int = 1, page_size: int | None = None) -> Self:
         page_size = page_size or type(self).default_page_size
         offset = (n - 1) * page_size
-        return self.select().offset(offset).limit(page_size)  # type: ignore[return-value]
+        return self.paginate(offset, page_size)
+
+    def paginate(self, offset: int | None = None, limit: int | None = None) -> Self:
+        query = self.select(self.model).query
+
+        if offset is not None:
+            query = query.offset(offset)  # type: ignore[attr-defined]
+        if limit is not None:
+            query = query.limit(limit)
+        if type(self).order_by is not None:
+            query = query.order_by(type(self).order_by)
+        return self.copy(query)
 
     async def count(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> int:
         query = self._select(sa.func.count()).select_from(self.model)
@@ -323,16 +331,8 @@ class SQLAlchemyRepository(Generic[Model]):
     async def delete_many(self, *args, **kwargs) -> Sequence[Model]:
         return await self.delete(return_results=True).filter(*args, **kwargs).all()
 
-    async def list(self, offset: int | None = None, limit: int | None = None):
-        query = self._select(self.model)
-        if offset is not None:
-            query = query.offset(offset)
-        if limit is not None:
-            query = query.limit(limit)
-        if type(self).order_by is not None:
-            query = query.order_by(type(self).order_by)
-        self._query = query
-        return await self.all()
+    async def list(self, *args, **kwargs) -> Sequence[Model]:
+        return await self.select().filter(*args, **kwargs).all()
 
     async def bulk_create_or_update(
         self,
@@ -363,7 +363,9 @@ class SQLAlchemyRepository(Generic[Model]):
             await q.execute()
         return None
 
-    async def bulk_update(self, values: Sequence[dict[str, Any]], on_: set[str], *args):
+    async def bulk_update(
+        self, values: Sequence[Mapping], on_: set[str], *args
+    ) -> None:
         where = [getattr(self.model, field) == bindparam(f"u_{field}") for field in on_]
         values = [
             {key if key not in on_ else f"u_{key}": value for key, value in row.items()}
