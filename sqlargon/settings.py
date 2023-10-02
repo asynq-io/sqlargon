@@ -15,13 +15,8 @@ class PoolSettings(BaseSettings):
     pool_pre_ping: bool = Field(True, env="DATABASE_POOL_PRE_PING")
 
     def to_kwargs(self) -> Dict[str, Any]:
-        if self.poolclass == NullPool:
-            return {"poolclass": NullPool}
-        elif self.poolclass == StaticPool:
-            return {
-                "poolclass": StaticPool,
-                "connect_args": {"check_same_thread": False},
-            }
+        if self.poolclass in {NullPool, StaticPool}:
+            return {"poolclass": self.poolclass}
         return self.dict()
 
 
@@ -35,10 +30,11 @@ class DatabaseSettings(BaseSettings):
     json_deserializer: PyObject = Field(
         "sqlargon.util.json_loads", env="DATABASE_JSON_DESERIALIZER"
     )
+    connect_args: Optional[Dict[str, Any]] = Field(None, env="DATABASE_CONNECT_ARGS")
     pool_settings: PoolSettings = Field(default_factory=PoolSettings)
 
     def to_kwargs(self) -> Dict[str, Any]:
-        kwargs = self.dict(exclude={"pool_settings"})
+        kwargs = self.dict(exclude={"pool_settings"}, exclude_none=True)
         kwargs.update(self.pool_settings.to_kwargs())
         return kwargs
 

@@ -226,7 +226,7 @@ class SQLAlchemyRepository(Generic[Model]):
         query = self.select(self.model).query
 
         if offset is not None:
-            query = query.offset(offset)
+            query = query.offset(offset)  # type: ignore[attr-defined]
         if limit is not None:
             query = query.limit(limit)
         if type(self).order_by is not None:
@@ -363,7 +363,9 @@ class SQLAlchemyRepository(Generic[Model]):
             await q.execute()
         return None
 
-    async def bulk_update(self, values: Sequence[dict[str, Any]], on_: set[str], *args):
+    async def bulk_update(
+        self, values: Sequence[Mapping], on_: set[str], *args
+    ) -> None:
         where = [getattr(self.model, field) == bindparam(f"u_{field}") for field in on_]
         values = [
             {key if key not in on_ else f"u_{key}": value for key, value in row.items()}
