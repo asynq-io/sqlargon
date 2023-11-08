@@ -116,7 +116,7 @@ class SQLAlchemyRepository(Generic[Model]):
     def query(self) -> ClauseElement | Executable:
         if self._query is None:
             query = self._select(self.model)
-            if self.default_order_by:
+            if self.default_order_by is not None:
                 query = query.order_by(self.default_order_by)
             self._query = query
         return self._query
@@ -131,7 +131,7 @@ class SQLAlchemyRepository(Generic[Model]):
         query = self._query
         if query is None:
             query = self._select(self.model)
-            if self.default_order_by:
+            if self.default_order_by is not None:
                 query = query.order_by(self.default_order_by)
         if args:
             query = query.filter(*args)  # type: ignore[union-attr]

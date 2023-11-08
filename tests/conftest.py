@@ -42,6 +42,8 @@ async def user_model(db):
 @pytest.fixture()
 def user_repository_class(user_model):
     class UserRepository(SQLAlchemyRepository[user_model]):
+        default_order_by = user_model.name.desc()
+
         @property
         def on_conflict(self):
             return {"set_": {"name"}, "index_elements": ["id"]}
