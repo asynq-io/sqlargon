@@ -49,7 +49,7 @@ class SQLAlchemyRepository(Generic[Model]):
     supports_on_conflict: bool = False
 
     model: type[Model]
-    order_by: str | _ColumnExpressionArgument[_T] | None = None
+    default_order_by: str | _ColumnExpressionArgument[_T] | None = None
     default_execution_options: tuple[tuple, dict] = ((), {})
     default_page_size: int = 100
 
@@ -116,8 +116,8 @@ class SQLAlchemyRepository(Generic[Model]):
     def query(self) -> ClauseElement | Executable:
         if self._query is None:
             query = self._select(self.model)
-            if type(self).order_by:
-                query = query.order_by(type(self).order_by)
+            if self.default_order_by is not None:
+                query = query.order_by(self.default_order_by)
             self._query = query
         return self._query
 
@@ -131,7 +131,8 @@ class SQLAlchemyRepository(Generic[Model]):
         query = self._query
         if query is None:
             query = self._select(self.model)
-
+            if self.default_order_by is not None:
+                query = query.order_by(self.default_order_by)
         if args:
             query = query.filter(*args)  # type: ignore[union-attr]
         if kwargs:
@@ -145,8 +146,8 @@ class SQLAlchemyRepository(Generic[Model]):
         if len(args) == 0:
             args = (self.model,)
         query = self._select(*args)
-        if type(self).order_by is not None:
-            query = query.order_by(type(self).order_by)
+        if self.default_order_by is not None:
+            query = query.order_by(self.default_order_by)
         return self.copy(query)
 
     def insert(
@@ -229,8 +230,8 @@ class SQLAlchemyRepository(Generic[Model]):
             query = query.offset(offset)  # type: ignore[attr-defined]
         if limit is not None:
             query = query.limit(limit)
-        if type(self).order_by is not None:
-            query = query.order_by(type(self).order_by)
+        if self.default_order_by is not None:
+            query = query.order_by(self.default_order_by)
         return self.copy(query)
 
     async def count(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> int:
