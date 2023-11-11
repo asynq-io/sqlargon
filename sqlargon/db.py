@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import functools
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Callable
+from typing import Any, AsyncGenerator, Awaitable, Callable, TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from typing_extensions import ParamSpec
 
 from .repository import SQLAlchemyRepository
 from .settings import DatabaseSettings
@@ -15,6 +16,9 @@ try:
     from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 except ImportError:
     SQLAlchemyInstrumentor = None
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 def configure_repository_class(dialect: str) -> None:
@@ -71,37 +75,43 @@ class Database:
         settings = DatabaseSettings(**kwargs)
         return cls.from_settings(settings)
 
-    def inject_session(self, func):
+    def inject_session(
+        self, func: Callable[P, Awaitable[R]]
+    ) -> Callable[P, Awaitable[R]]:
         @functools.wraps(func)
-        async def wrapped(*args, **kwargs):
-            if "session" not in kwargs or kwargs["session"] is None:
+        async def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
+            if kwargs.get("session") is None:
                 async with self.session() as session:
                     kwargs["session"] = session
                     return await func(*args, **kwargs)
+            else:
+                return await func(*args, **kwargs)
 
         return wrapped
 
     def inject_repository(
         self, cls: type[SQLAlchemyRepository], name: str = "repository"
     ):
-        def wrapper(func):
+        def wrapper(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
             @functools.wraps(func)
-            async def wrapped(*args, **kwargs):
-                if name not in kwargs or kwargs[name] is None:
+            async def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
+                if kwargs.get(name) is None:
                     async with self.session() as session:
                         repository = cls(session=session)
                         kwargs[name] = repository
                         return await func(*args, **kwargs)
+                else:
+                    return await func(*args, **kwargs)
 
             return wrapped
 
         return wrapper
 
     def inject_uow(self, cls: type[SQLAlchemyUnitOfWork], name: str = "uow"):
-        def wrapper(func):
+        def wrapper(func: Callable[P, Awaitable[R]]):
             @functools.wraps(func)
-            async def wrapped(*args, **kwargs):
-                if name not in kwargs or kwargs[name] is None:
+            async def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
+                if kwargs.get(name) is None:
                     instance = cls(self.session_maker)
                     kwargs[name] = instance
                 return await func(*args, **kwargs)
