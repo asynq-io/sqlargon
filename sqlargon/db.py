@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import functools
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Awaitable, Callable, ParamSpec, TypeVar
+from typing import Any, AsyncGenerator, Awaitable, Callable, TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from typing_extensions import ParamSpec
 
 from .repository import SQLAlchemyRepository
 from .settings import DatabaseSettings
