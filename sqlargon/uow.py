@@ -38,17 +38,17 @@ class SQLAlchemyUnitOfWork(AbstractUoW):
         self._session = self.session_factory()
         return self
 
-    async def _close(self, *exc) -> None:
+    async def _close(self, exc_val) -> None:
         try:
-            if exc:
+            if exc_val is not None:
                 await self.session.rollback()
             elif self.autocommit:
                 await self.commit()
         finally:
             await self.session.close()
 
-    async def __aexit__(self, *exc):
-        task = asyncio.create_task(self._close(*exc))
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        task = asyncio.create_task(self._close(exc_val))
         await asyncio.shield(task)
 
     async def commit(self) -> None:
