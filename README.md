@@ -7,14 +7,14 @@
 ![Format](https://img.shields.io/pypi/format/sqlargon)
 ![PyPi](https://img.shields.io/pypi/v/sqlargon)
 ![Mypy](https://img.shields.io/badge/mypy-checked-blue)
-![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v1.json)](https://github.com/charliermarsh/ruff)
 [![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 
 
 *Wrapper around SQLAlchemy async session, core and Postgres native features*
 
 ---
-Version: 0.2.8
+Version: 1.0.0-beta.1
 
 Documentation: https://performancemedia.github.io/sqlargon/
 
@@ -55,11 +55,12 @@ class UserRepository(SQLAlchemyRepository[User]):
         # custom user function
         return await self.select().filter_by(name=name).one()
 
-user_repository = UserRepository(...)
+user_repository = UserRepository(db)
 
 # select
 await user_repository.all()
-await user_repository.select().where(User.name == "test", User.id >= 18)
+await user_repository.list(User.name == "test", User.id >= 18)
+
 
 # insert
 user = await user_repository.insert({"name": "test"}).one()
@@ -85,24 +86,25 @@ Manager object needs `sqlalchemy.ext.asyncio.AsyncSession`, but it's possible
 to provide the session object by yourself, by subclassing Manager class e.g.
 
 ```python
-from sqlargon import Database
-from sqlargon.contrib.fastapi import FastapiRepositoryProvider
+from sqlargon import Database, SQLAlchemyRepository
+from fastapi import Depends
 
 db = Database(url="sqlite+aiosqlite:///:memory:")
-di = FastapiRepositoryProvider(db)
 
 
-class UserRepository(Repository[User]):
+class UserRepository(SQLAlchemyRepository[User]):
     ...
 
 
+
+    
 from fastapi import FastAPI
 
 app = FastAPI()
 
 
 @app.get("/users")
-async def get_users(user_repository: UserRepository = di[UserRepository]):
+async def get_users(user_repository: UserRepository = db.Depends(UserRepository)):
     return await user_repository.all()
 
 ```

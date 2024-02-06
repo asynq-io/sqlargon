@@ -36,7 +36,6 @@ class Timestamp(TypeDecorator):
                 return value
 
     def process_result_value(self, value, dialect):
-
         # retrieve timestamps in their native timezone (or UTC)
         if value is not None:
             return value.replace(tzinfo=timezone.utc)

@@ -1,12 +1,19 @@
+from __future__ import annotations
+
 import asyncio
 from abc import ABC, abstractmethod
+from typing import TypeVar, get_type_hints
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlargon import Database, SQLAlchemyRepository
 
-class AbstractUoW(ABC):
+U = TypeVar("U", bound="AbstractUnitOfWork")
+
+
+class AbstractUnitOfWork(ABC):
     @abstractmethod
-    async def __aenter__(self) -> None:
+    async def __aenter__(self: U) -> U:
         raise NotImplementedError
 
     @abstractmethod
@@ -22,34 +29,50 @@ class AbstractUoW(ABC):
         raise NotImplementedError
 
 
-class SQLAlchemyUnitOfWork(AbstractUoW):
+class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
     def __init__(
-        self, session_factory, autocommit: bool = True, raise_on_exc: bool = True
-    ):
-        self.session_factory = session_factory
+        self,
+        db: Database,
+        autocommit: bool = True,
+        raise_on_exc: bool = True,
+    ) -> None:
+        self.db = db
         self.autocommit = autocommit
         self.raise_on_exc = raise_on_exc
+        self._repositories: dict[str, SQLAlchemyRepository] = {}
+        self._session: AsyncSession | None = None
+
+    async def __aenter__(self):
+        session = self.db.session()
+        self.db.current_session = session
 
     @property
     def session(self) -> AsyncSession:
-        return self._session
+        session = self.db.current_session
+        if session is None:
+            raise ValueError("Session not initialized")
+        return session
 
-    async def __aenter__(self):
-        self._session = self.session_factory()
-        return self
-
-    async def _close(self, exc_val) -> None:
+    async def _close(self, session: AsyncSession, exc: Exception | None = None) -> None:
+        # session is passed explicitly because _close is called
+        # in another asyncio.task with a different context
         try:
-            if exc_val is not None:
-                await self.session.rollback()
+            if exc:
+                await session.rollback()
             elif self.autocommit:
-                await self.commit()
+                try:
+                    await session.commit()
+                except:  # noqa
+                    await session.rollback()
+                    if self.raise_on_exc:
+                        raise
         finally:
-            await self.session.close()
+            await session.close()
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        task = asyncio.create_task(self._close(exc_val))
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        task = asyncio.create_task(self._close(self.session, exc_val))
         await asyncio.shield(task)
+        del self.db.current_session
 
     async def commit(self) -> None:
         try:
@@ -61,3 +84,11 @@ class SQLAlchemyUnitOfWork(AbstractUoW):
 
     async def rollback(self) -> None:
         await self.session.rollback()
+
+    def __getattr__(self, item: str) -> SQLAlchemyRepository:
+        if item not in self._repositories:
+            repository_cls = get_type_hints(self).get(item)
+            if repository_cls is None:
+                raise TypeError("Could not resolve type annotation for %s", item)
+            self._repositories[item] = repository_cls(self.db)
+        return self._repositories[item]

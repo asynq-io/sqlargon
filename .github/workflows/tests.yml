@@ -1,40 +1,40 @@
 name: Test
-on: [push]
+on: [push, pull_request]
 jobs:
   lint:
-    runs-on: ubuntu-20.04
+    runs-on: ["ubuntu-22.04"]
     name: lint
     steps:
       - uses: actions/checkout@master
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-      - run: sudo apt-get update && sudo apt-get install -y curl
-      - run: curl -sSL https://install.python-poetry.org | python3 -
-      - run: poetry install
-      - run: poetry run flake8 ./sqlargon
-      - run: poetry run black --check ./sqlargon
+      - run: sudo apt-get update && sudo apt-get install -y curl gcc
+      - run: curl -sSL https://install.python-poetry.org | POETRY_VERSION=1.4.1 python3 -
+      - run: poetry install --all-extras
+      - run: poetry check
+      - run: poetry run ruff check ./sqlargon
+      - run: poetry run ruff format ./sqlargon --check
       - run: poetry run mypy ./sqlargon
+      - run: poetry run deptry ./sqlargon
+      - run: poetry run bandit -r ./sqlargon
 
   build-unix:
     timeout-minutes: 30
     strategy:
       matrix:
         os: ["ubuntu-22.04"]
-        python: ["3.8", "3.9", "3.10", "3.11"]
+        python: ["3.9", "3.10", "3.11", "3.12"]
 
     runs-on: ${{ matrix.os }}
     name: test on ${{ matrix.python }} - ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: sudo apt-get update && sudo apt-get install -y gcc curl make
+      - run: sudo apt-get update && sudo apt-get install -y gcc curl
       - run: curl -sSL https://install.python-poetry.org | python3 -
-      - run: poetry install
+      - run: poetry install --all-extras
       - run: poetry run pytest --cov=./sqlargon --cov-report=xml -v ./tests
-#      - name: upload codecov
-#        if: matrix.python == 3.9
-#        run: bash <(curl -s https://codecov.io/bash)

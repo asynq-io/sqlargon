@@ -3,7 +3,7 @@ from sqlalchemy import BOOLEAN, FunctionElement, TypeDecorator
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.ext.compiler import compiles
 
-from ..util import json_dumps
+from ..utils import json_dumps
 
 
 class json_contains(FunctionElement):
@@ -92,7 +92,6 @@ class json_has_any_key(FunctionElement):
 @compiles(json_has_any_key, "postgresql")
 @compiles(json_has_any_key)
 def _json_has_any_key_postgresql(element, compiler, **kwargs):
-
     values_array = postgresql.array(element.values)
     # if the array is empty, postgres requires a type annotation
     if not element.values:
@@ -187,7 +186,7 @@ class JSON(TypeDecorator):
         else:
             return dialect.type_descriptor(sa.JSON(none_as_null=True))
 
-    class comparator_factory(sa.JSON.Comparator):
+    class ComparatorFactory(sa.JSON.Comparator):
         def contains(self, other, **kw):
             return json_contains(self, other)
 
@@ -196,3 +195,5 @@ class JSON(TypeDecorator):
 
         def has_all_keys(self, other):
             return json_has_all_keys(self, other)
+
+    comparator_factory = ComparatorFactory
