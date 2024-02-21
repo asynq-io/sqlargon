@@ -235,20 +235,3 @@ class Database:
 
     def inject_uow(self, cls: type[SQLAlchemyUnitOfWork], name: str = "uow"):
         return self._inject_object(cls, name)
-
-    def Depends(
-        self, repository: type[SQLAlchemyRepository], with_session: bool = False
-    ) -> Any:
-        from fastapi import Depends
-
-        def wrapper():
-            return repository(self)
-
-        async def wrapper_with_session():
-            async with self.session():
-                yield repository(self)
-
-        if with_session:
-            return Depends(wrapper_with_session)
-
-        return Depends(wrapper)

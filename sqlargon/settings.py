@@ -28,6 +28,8 @@ class PoolSettings(AbstractDbSettings):
     echo_pool: bool = False
     pool_recycle: int = 360
     pool_pre_ping: bool = True
+    pool_timeout: int = 30
+    pool_use_lifo: bool = False
 
     def to_kwargs(self) -> dict[str, Any]:
         if self.poolclass in {NullPool, StaticPool}:

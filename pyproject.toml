@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sqlargon"
-version = "1.0.0-beta.1"
+version = "0.3.0"
 description = "SQLAlchemy utils for Postgres and Sqlite"
 readme = "README.md"
 authors = [
@@ -21,7 +21,7 @@ opentelemetry-instrumentation-sqlalchemy = {version = "*", optional = true}
 [tool.poetry.extras]
 all = ["orjson", "opentelemetry-instrumentation-sqlalchemy"]
 orjson = ["orjson"]
-open-telemetry = ["opentelemetry-instrumentation-sqlalchemy"]
+opentelemetry = ["opentelemetry-instrumentation-sqlalchemy"]
 
 [tool.poetry.group.dev.dependencies]
 ruff = "==0.1.13"
@@ -39,11 +39,12 @@ pytest-sugar = "^0.9.7"
 pytest-repeat = "^0.9.3"
 
 [tool.poetry.group.docs.dependencies]
-mkdocs = "^1.4.2"
-mkdocs-material = "^8.2.1"
-mkdocs-autorefs = "^0.4.1"
-mkdocs-gen-files = ">=0.4,<0.6"
-mkdocstrings = {version = ">=0.18", extras = ["python"]}
+mkdocs = "^1.5.3"
+watchdog = ">=2.0,<4.0"
+mkdocs-material = "^9.5.9"
+mkdocs-autorefs = "^0.5.0"
+mkdocs-gen-files = "^0.5.0"
+mkdocstrings = {extras = ["python"], version = "^0.24.0"}
 
 
 [tool.pytest.ini_options]
@@ -103,9 +104,8 @@ line-ending = "auto"
 max-complexity = 8
 
 [tool.deptry.per_rule_ignores]
-DEP001 = ["fastapi"]
 DEP002 = ["alembic", "asyncpg", "aiosqlite"]
-DEP003 = ["sqlargon", "typing_extensions", "pydantic_core", "fastapi"]
+DEP003 = ["sqlargon", "typing_extensions", "pydantic_core"]
 
 
 [tool.semantic_release]
