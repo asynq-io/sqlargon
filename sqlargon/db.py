@@ -235,11 +235,3 @@ class Database:
 
     def inject_uow(self, cls: type[SQLAlchemyUnitOfWork], name: str = "uow"):
         return self._inject_object(cls, name)
-
-    def sql(self, func):
-        query = sa.text(func())
-
-        async def wrapper(*args, **kwargs):
-            return await self.execute(query, *args, **kwargs)
-
-        return wrapper
