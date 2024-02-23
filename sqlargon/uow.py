@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import TypeVar, get_type_hints
+from typing import Any, TypeVar, get_type_hints
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -85,7 +85,9 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
     async def rollback(self) -> None:
         await self.session.rollback()
 
-    def __getattr__(self, item: str) -> SQLAlchemyRepository:
+    def __getattr__(self, item: str) -> Any:
+        if item.startswith("__"):
+            return self.__getattribute__(item)
         if item not in self._repositories:
             repository_cls = get_type_hints(self).get(item)
             if repository_cls is None:
