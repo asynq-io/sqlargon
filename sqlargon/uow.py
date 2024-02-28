@@ -43,7 +43,7 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
         self._session: AsyncSession | None = None
 
     async def __aenter__(self):
-        session = self.db.session()
+        session = self.db.session_maker()
         self.db.current_session = session
 
     @property
