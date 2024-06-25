@@ -2,17 +2,11 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Coroutine, Generator, Mapping, Sequence
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Generic,
-    TypedDict,
-    TypeVar,
-)
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Callable, Generic, TypedDict, TypeVar
 
 import sqlalchemy as sa
-from sqlakeyset import Page
+from sqlakeyset import unserialize_bookmark
 from sqlakeyset.paging import (
     core_page_from_rows,
     prepare_paging,
@@ -46,6 +40,14 @@ if TYPE_CHECKING:
 Model = TypeVar("Model", bound=ORMModel)
 D = TypeVar("D", bound=Any)
 _T = TypeVar("_T", bound=Any)
+
+
+@dataclass
+class Page(Generic[Model]):
+    items: Sequence[Model] | Sequence[Row]
+    current_page: str | None
+    next_page: str | None
+    previous_page: str | None
 
 
 class OnConflict(TypedDict, total=False):
@@ -372,12 +374,13 @@ class SQLAlchemyRepository(Generic[Model]):
         await self.db.commit()
 
     async def get_page(
-        self, cursor: str | None = None, page_size: int = 100, backwards: bool = False
-    ) -> Page[Row]:
+        self, page: str | None = None, page_size: int = 100, as_model: bool = True
+    ) -> Page[Model]:
+        place, backwards = unserialize_bookmark(page)
         sel = prepare_paging(
             q=self.query,
             per_page=page_size,
-            place=cursor,
+            place=place,
             backwards=backwards,
             orm=False,
             dialect=self.db.engine.dialect,
@@ -386,13 +389,22 @@ class SQLAlchemyRepository(Generic[Model]):
         keys = list(selected.keys())
         idx = len(keys) - len(sel.extra_columns)
         keys = keys[:idx]
-        page = core_page_from_rows(
+        page_result = core_page_from_rows(
             sel,
             selected.fetchall(),
             keys,
             None,
             page_size,
             backwards,
-            current_place=cursor,
+            current_place=place,
         )
-        return page
+        return Page(
+            items=[p[0] for p in page_result] if as_model else page_result,
+            current_page=page,
+            next_page=page_result.paging.bookmark_next
+            if page_result.paging.has_next
+            else None,
+            previous_page=page_result.paging.bookmark_previous
+            if page_result.paging.has_previous
+            else None,
+        )
