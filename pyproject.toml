@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sqlargon"
-version = "0.3.2"
+version = "0.4.0"
 description = "SQLAlchemy utils for Postgres and Sqlite"
 readme = "README.md"
 authors = [
@@ -17,6 +17,7 @@ pydantic = ">=2.0,<3"
 pydantic-settings = "^2.1.0"
 orjson = {version = "*", optional = true}
 opentelemetry-instrumentation-sqlalchemy = {version = "*", optional = true}
+sqlakeyset = "^2.0.1716332987"
 
 [tool.poetry.extras]
 all = ["orjson", "opentelemetry-instrumentation-sqlalchemy"]
@@ -29,7 +30,7 @@ mypy = "^1.2.0"
 deptry = "^0.12.0"
 bandit = "^1.7.4"
 python-semantic-release = "^7.33.2"
-greenlet = {version = "^3.0.3", platform = "arm64"}
+greenlet = "^3.0.3"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.2.1"
@@ -104,7 +105,8 @@ line-ending = "auto"
 max-complexity = 8
 
 [tool.deptry.per_rule_ignores]
-DEP002 = ["alembic", "asyncpg", "aiosqlite"]
+DEP001 = ["opentelemetry"]
+DEP002 = ["alembic", "asyncpg", "aiosqlite", "opentelemetry-instrumentation-sqlalchemy"]
 DEP003 = ["sqlargon", "typing_extensions", "pydantic_core"]
 
 

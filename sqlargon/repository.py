@@ -2,10 +2,30 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Coroutine, Generator, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Callable, Generic, TypedDict, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generic,
+    TypedDict,
+    TypeVar,
+)
 
 import sqlalchemy as sa
-from sqlalchemy import Executable, MappingResult, Result, ScalarResult, bindparam
+from sqlakeyset import Page
+from sqlakeyset.paging import (
+    core_page_from_rows,
+    prepare_paging,
+)
+from sqlalchemy import (
+    Executable,
+    MappingResult,
+    Result,
+    Row,
+    ScalarResult,
+    Select,
+    bindparam,
+)
 from sqlalchemy.ext.asyncio import AsyncScalarResult
 from sqlalchemy.orm import joinedload, load_only
 from typing_extensions import Self
@@ -126,7 +146,7 @@ class SQLAlchemyRepository(Generic[Model]):
         return query
 
     @property
-    def query(self) -> ClauseElement | Executable:
+    def query(self) -> Select | ClauseElement | Executable:
         if self._query is None:
             self._query = self._get_default_select_query()
         return self._query
@@ -224,18 +244,6 @@ class SQLAlchemyRepository(Generic[Model]):
         ]
         query = self.query.options(*load_args_options, *load_kwargs_options)
         return self.copy(query)
-
-    def page(self, offset: int | None = None, limit: int | None = None) -> Self:
-        query = self.query
-
-        if offset is not None:
-            query = query.offset(offset)  # type: ignore[attr-defined]
-        if limit is not None:
-            query = query.limit(limit)
-        return self.copy(query)
-
-    async def paginate(self, offset: int = 0, limit: int = 100) -> Sequence[Model]:
-        return await self.page(offset, limit).all()
 
     async def count(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> int:
         query = self._select(sa.func.count()).select_from(self.model)
@@ -362,3 +370,29 @@ class SQLAlchemyRepository(Generic[Model]):
 
     async def commit(self) -> None:
         await self.db.commit()
+
+    async def get_page(
+        self, cursor: str | None = None, page_size: int = 100, backwards: bool = False
+    ) -> Page[Row]:
+        sel = prepare_paging(
+            q=self.query,
+            per_page=page_size,
+            place=cursor,
+            backwards=backwards,
+            orm=False,
+            dialect=self.db.engine.dialect,
+        )
+        selected = await self.execute_query(sel.select)
+        keys = list(selected.keys())
+        idx = len(keys) - len(sel.extra_columns)
+        keys = keys[:idx]
+        page = core_page_from_rows(
+            sel,
+            selected.fetchall(),
+            keys,
+            None,
+            page_size,
+            backwards,
+            current_place=cursor,
+        )
+        return page

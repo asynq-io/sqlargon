@@ -72,7 +72,7 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         task = asyncio.create_task(self._close(self.session, exc_val))
         await asyncio.shield(task)
-        del self.db.current_session
+        self.db.current_session = None
 
     async def commit(self) -> None:
         try:

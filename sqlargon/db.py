@@ -11,7 +11,7 @@ from sqlalchemy import Executable
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from typing_extensions import ParamSpec
 
-from .orm import Base, ORMModel
+from .orm import Base
 from .settings import DatabaseSettings
 from .utils import json_dumps, json_loads
 
@@ -26,8 +26,6 @@ if TYPE_CHECKING:
 
 P = ParamSpec("P")
 R = TypeVar("R")
-
-M = TypeVar("M", bound=ORMModel)
 
 
 class Database:
@@ -69,7 +67,7 @@ class Database:
         if dialect == "postgresql":
             from sqlalchemy.dialects.postgresql import insert
 
-            self.insert = insert  # type: ignore[assignment]
+            self.insert = insert
             self.supports_returning = True
             self.supports_on_conflict = True
 
@@ -78,7 +76,7 @@ class Database:
 
             from sqlalchemy.dialects.sqlite import insert
 
-            self.insert = insert  # type: ignore[assignment]
+            self.insert = insert
             self.supports_returning = sqlite3.sqlite_version > "3.35"
             self.supports_on_conflict = True
 

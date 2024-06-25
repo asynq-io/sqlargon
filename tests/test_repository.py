@@ -42,3 +42,22 @@ async def test_bulk_update(user_repository):
         )
         == 2
     )
+
+
+async def test_paginate_empty_repository(user_repository):
+    page = await user_repository.get_page()
+    assert len(page) == 0
+    assert page.paging.has_next is False
+
+
+async def test_paginate_repository(user_repository):
+    users = [
+        {"name": "John"},
+        {"name": "Vincent"},
+        {"name": "Andrew"},
+    ]
+    await user_repository.insert(users)
+    page = await user_repository.get_page(page_size=2)
+    assert len(page) == 2
+    assert page.paging.has_next is True
+    assert page.paging.bookmark_next == ">s:John"
