@@ -1,9 +1,9 @@
 import uuid
 
-from sqlalchemy import CHAR, FunctionElement
+from sqlalchemy import CHAR, UUID, FunctionElement
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.sql.type_api import TypeDecorator, TypeEngine
+from sqlalchemy.sql.type_api import TypeDecorator
 
 
 class GUID(TypeDecorator):
@@ -15,12 +15,12 @@ class GUID(TypeDecorator):
     hyphens.
     """
 
-    impl = TypeEngine
+    impl = UUID
     cache_ok = True
 
     def load_dialect_impl(self, dialect):
         if dialect.name == "postgresql":
-            return dialect.type_descriptor(postgresql.UUID())
+            return dialect.type_descriptor(postgresql.UUID(as_uuid=True))
         else:
             return dialect.type_descriptor(CHAR(36))
 
