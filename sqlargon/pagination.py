@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, Union
 
 from sqlakeyset import unserialize_bookmark
 from sqlakeyset.paging import (
@@ -16,9 +16,12 @@ from sqlalchemy import (
     func,
 )
 
-from . import ORMModel
+from .orm import Model
 
-Model = TypeVar("Model", bound=ORMModel)
+P = TypeVar("P", bound=Union[str, int, None])
+
+if TYPE_CHECKING:
+    from .repository import SQLAlchemyRepository
 
 
 @dataclass
@@ -41,11 +44,21 @@ class NumberedPage(BasePage[Model]):
     total_items: int | None
 
 
-class PaginationStrategy(ABC):
-    _repository: Any = None
+class PaginationStrategy(Generic[P], ABC):
+    def __init__(self, repository: SQLAlchemyRepository | None = None) -> None:
+        self._repository = repository
 
-    def __get__(self, instance: Any, owner: type[Any]) -> PaginationStrategy:
-        self._repository = instance
+    @property
+    def repository(self) -> SQLAlchemyRepository:
+        if not self._repository:
+            raise ValueError("Repository not set")
+        return self._repository
+
+    def __get__(
+        self, instance: SQLAlchemyRepository | None, owner: type[SQLAlchemyRepository]
+    ) -> PaginationStrategy:
+        if instance:
+            return self.__class__(instance)
         return self
 
     def _convert_to_models(self, page_result: Any) -> list[Model]:
@@ -54,30 +67,32 @@ class PaginationStrategy(ABC):
     @abstractmethod
     async def paginate(
         self,
+        page: P,
+        page_size: int = 100,
         as_model: bool = True,
         **kwargs,
     ) -> BasePage:
         raise NotImplementedError
 
 
-class TokenPaginationStrategy(PaginationStrategy):
+class TokenPaginationStrategy(PaginationStrategy[Union[str, None]]):
     async def paginate(
         self,
-        as_model: bool = True,
         page: str | None = None,
         page_size: int = 100,
+        as_model: bool = True,
         **kwargs,
     ) -> BasePage:
         place, backwards = unserialize_bookmark(page)
         sel = prepare_paging(
-            q=self._repository.query,
+            q=self.repository.query,
             per_page=page_size,
             place=place,
             backwards=backwards,
             orm=False,
-            dialect=self._repository.db.engine.dialect,
+            dialect=self.repository.db.engine.dialect,
         )
-        selected = await self._repository.execute(sel.select)
+        selected = await self.repository.execute_query(sel.select)
         keys = list(selected.keys())
         idx = len(keys) - len(sel.extra_columns)
         keys = keys[:idx]
@@ -102,25 +117,25 @@ class TokenPaginationStrategy(PaginationStrategy):
         )
 
 
-class NumberedPaginationStrategy(PaginationStrategy):
+class NumberedPaginationStrategy(PaginationStrategy[int]):
     async def paginate(
         self,
-        as_model: bool = True,
-        page_number: int = 1,
+        page: int = 1,
         page_size: int = 100,
+        as_model: bool = True,
         include_total: bool = True,
         **kwargs,
     ) -> BasePage:
-        offset = (page_number - 1) * page_size
-        page_query = self._repository.query.offset(offset).limit(page_size)
+        offset = (page - 1) * page_size
+        page_query = self.repository.query.offset(offset).limit(page_size)
 
         if include_total:
             total_records_query = Select(func.count()).select_from(
-                self._repository.query.subquery()
+                self.repository.query.subquery()
             )
             queries = (total_records_query, page_query)
             results = [
-                result async for result in await self._repository.execute_many(queries)
+                result async for result in await self.repository.execute_many(queries)
             ]
             total_records = results[0].scalar()
             page_result = results[1]
@@ -128,11 +143,11 @@ class NumberedPaginationStrategy(PaginationStrategy):
         else:
             total_records = None
             total_pages = None
-            page_result = await self._repository.execute_query(page_query)
+            page_result = await self.repository.execute_query(page_query)
 
         return NumberedPage(
             items=self._convert_to_models(page_result) if as_model else page_result,
-            current_page=page_number,
+            current_page=page,
             page_size=page_size,
             total_pages=total_pages,
             total_items=total_records,

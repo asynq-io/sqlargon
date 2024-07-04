@@ -17,8 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncScalarResult
 from sqlalchemy.orm import joinedload, load_only
 from typing_extensions import Self
 
-from .orm import ORMModel
-from .pagination import BasePage, NumberedPaginationStrategy, PaginationStrategy
+from .orm import Model, ORMModel
+from .pagination import BasePage, PaginationStrategy, TokenPaginationStrategy
 
 if TYPE_CHECKING:
     from sqlalchemy.sql import ClauseElement
@@ -31,7 +31,6 @@ if TYPE_CHECKING:
 
     from . import Database
 
-Model = TypeVar("Model", bound=ORMModel)
 D = TypeVar("D", bound=Any)
 _T = TypeVar("_T", bound=Any)
 
@@ -49,7 +48,7 @@ class SQLAlchemyRepository(Generic[Model]):
     default_order_by: str | _ColumnExpressionArgument[_T] | None = None
     default_execution_options: tuple[tuple, dict] = ((), {})
     default_page_size: int = 100
-    paginator: PaginationStrategy = NumberedPaginationStrategy()
+    paginator: PaginationStrategy = TokenPaginationStrategy()
 
     _default_set = None
 
@@ -242,9 +241,7 @@ class SQLAlchemyRepository(Generic[Model]):
             query = query.filter_by(**kwargs)
         return (await self.execute_query(query)).scalar()
 
-    async def execute_many(
-        self, queries: Sequence[Executable], *args, **kwargs
-    ) -> Sequence[Result]:
+    async def execute_many(self, queries: Sequence[Executable], *args, **kwargs):
         return await self.db.execute_many(queries, *args, **kwargs)
 
     async def execute_query(self, query: Executable, *args, **kwargs) -> Result:
@@ -360,5 +357,9 @@ class SQLAlchemyRepository(Generic[Model]):
     async def commit(self) -> None:
         await self.db.commit()
 
-    async def get_page(self, as_model: bool = True, **kwargs) -> BasePage[Model]:
-        return await self.paginator.paginate(as_model, **kwargs)
+    async def get_page(
+        self, page: Any = None, page_size: int = 100, as_model: bool = True, **kwargs
+    ) -> BasePage[Model]:
+        return await self.paginator.paginate(
+            page=page, page_size=page_size, as_model=as_model, **kwargs
+        )
