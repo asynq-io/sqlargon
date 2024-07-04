@@ -145,10 +145,12 @@ class NumberedPaginationStrategy(PaginationStrategy[int]):
             total_pages = None
             page_result = await self.repository.execute_query(page_query)
 
+        items = self._convert_to_models(page_result) if as_model else page_result
+
         return NumberedPage(
-            items=self._convert_to_models(page_result) if as_model else page_result,
+            items=items,
             current_page=page,
-            page_size=page_size,
+            page_size=len(items),
             total_pages=total_pages,
             total_items=total_records,
         )
