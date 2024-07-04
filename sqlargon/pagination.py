@@ -11,14 +11,12 @@ from sqlakeyset.paging import (
     prepare_paging,
 )
 from sqlalchemy import (
-    Executable,
     Row,
     Select,
     func,
 )
-from sqlalchemy.sql import ClauseElement
 
-from . import Database, ORMModel
+from . import ORMModel
 
 Model = TypeVar("Model", bound=ORMModel)
 
@@ -44,25 +42,27 @@ class NumberedPage(BasePage[Model]):
 
 
 class PaginationStrategy(ABC):
+    _repository: Any = None
+
+    def __get__(self, instance: Any, owner: type[Any]) -> PaginationStrategy:
+        self._repository = instance
+        return self
+
     def _convert_to_models(self, page_result: Any) -> list[Model]:
         return [p[0] for p in page_result]
 
     @abstractmethod
     async def paginate(
         self,
-        db: Database,
-        query: Select | ClauseElement | Executable,
         as_model: bool = True,
         **kwargs,
     ) -> BasePage:
-        pass
+        raise NotImplementedError
 
 
 class TokenPaginationStrategy(PaginationStrategy):
     async def paginate(
         self,
-        db: Database,
-        query: Select | ClauseElement | Executable,
         as_model: bool = True,
         page: str | None = None,
         page_size: int = 100,
@@ -70,14 +70,14 @@ class TokenPaginationStrategy(PaginationStrategy):
     ) -> BasePage:
         place, backwards = unserialize_bookmark(page)
         sel = prepare_paging(
-            q=query,
+            q=self._repository.query,
             per_page=page_size,
             place=place,
             backwards=backwards,
             orm=False,
-            dialect=db.engine.dialect,
+            dialect=self._repository.db.engine.dialect,
         )
-        selected = await db.execute(sel.select)
+        selected = await self._repository.execute(sel.select)
         keys = list(selected.keys())
         idx = len(keys) - len(sel.extra_columns)
         keys = keys[:idx]
@@ -105,25 +105,30 @@ class TokenPaginationStrategy(PaginationStrategy):
 class NumberedPaginationStrategy(PaginationStrategy):
     async def paginate(
         self,
-        db: Database,
-        query: Select | ClauseElement | Executable,
         as_model: bool = True,
         page_number: int = 1,
         page_size: int = 100,
         include_total: bool = True,
         **kwargs,
     ) -> BasePage:
+        offset = (page_number - 1) * page_size
+        page_query = self._repository.query.offset(offset).limit(page_size)
+
         if include_total:
-            total_records = (
-                await db.execute(Select(func.count()).select_from(query.subquery()))
-            ).scalar()
+            total_records_query = Select(func.count()).select_from(
+                self._repository.query.subquery()
+            )
+            queries = (total_records_query, page_query)
+            results = [
+                result async for result in await self._repository.execute_many(queries)
+            ]
+            total_records = results[0].scalar()
+            page_result = results[1]
             total_pages = (total_records + page_size - 1) // page_size
         else:
             total_records = None
             total_pages = None
-
-        offset = (page_number - 1) * page_size
-        page_result = await db.execute(query.offset(offset).limit(page_size))
+            page_result = await self._repository.execute_query(page_query)
 
         return NumberedPage(
             items=self._convert_to_models(page_result) if as_model else page_result,

@@ -361,4 +361,4 @@ class SQLAlchemyRepository(Generic[Model]):
         await self.db.commit()
 
     async def get_page(self, as_model: bool = True, **kwargs) -> BasePage[Model]:
-        return await self.paginator.paginate(self.db, self.query, as_model, **kwargs)
+        return await self.paginator.paginate(as_model, **kwargs)
