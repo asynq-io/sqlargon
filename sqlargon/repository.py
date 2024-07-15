@@ -2,20 +2,13 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Coroutine, Generator, Mapping, Sequence
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Generic, TypedDict, TypeVar
 
 import sqlalchemy as sa
-from sqlakeyset import unserialize_bookmark
-from sqlakeyset.paging import (
-    core_page_from_rows,
-    prepare_paging,
-)
 from sqlalchemy import (
     Executable,
     MappingResult,
     Result,
-    Row,
     ScalarResult,
     Select,
     bindparam,
@@ -24,7 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncScalarResult
 from sqlalchemy.orm import joinedload, load_only
 from typing_extensions import Self
 
-from .orm import ORMModel
+from .orm import Model, ORMModel
+from .pagination import BasePage, PaginationStrategy, TokenPaginationStrategy
 
 if TYPE_CHECKING:
     from sqlalchemy.sql import ClauseElement
@@ -37,17 +31,8 @@ if TYPE_CHECKING:
 
     from . import Database
 
-Model = TypeVar("Model", bound=ORMModel)
 D = TypeVar("D", bound=Any)
 _T = TypeVar("_T", bound=Any)
-
-
-@dataclass
-class Page(Generic[Model]):
-    items: Sequence[Model] | Sequence[Row]
-    current_page: str | None
-    next_page: str | None
-    previous_page: str | None
 
 
 class OnConflict(TypedDict, total=False):
@@ -63,6 +48,7 @@ class SQLAlchemyRepository(Generic[Model]):
     default_order_by: str | _ColumnExpressionArgument[_T] | None = None
     default_execution_options: tuple[tuple, dict] = ((), {})
     default_page_size: int = 100
+    paginator: PaginationStrategy = TokenPaginationStrategy()
 
     _default_set = None
 
@@ -255,9 +241,7 @@ class SQLAlchemyRepository(Generic[Model]):
             query = query.filter_by(**kwargs)
         return (await self.execute_query(query)).scalar()
 
-    async def execute_many(
-        self, queries: Sequence[Executable], *args, **kwargs
-    ) -> Sequence[Result]:
+    async def execute_many(self, queries: Sequence[Executable], *args, **kwargs):
         return await self.db.execute_many(queries, *args, **kwargs)
 
     async def execute_query(self, query: Executable, *args, **kwargs) -> Result:
@@ -374,37 +358,8 @@ class SQLAlchemyRepository(Generic[Model]):
         await self.db.commit()
 
     async def get_page(
-        self, page: str | None = None, page_size: int = 100, as_model: bool = True
-    ) -> Page[Model]:
-        place, backwards = unserialize_bookmark(page)
-        sel = prepare_paging(
-            q=self.query,
-            per_page=page_size,
-            place=place,
-            backwards=backwards,
-            orm=False,
-            dialect=self.db.engine.dialect,
-        )
-        selected = await self.execute_query(sel.select)
-        keys = list(selected.keys())
-        idx = len(keys) - len(sel.extra_columns)
-        keys = keys[:idx]
-        page_result = core_page_from_rows(
-            sel,
-            selected.fetchall(),
-            keys,
-            None,
-            page_size,
-            backwards,
-            current_place=place,
-        )
-        return Page(
-            items=[p[0] for p in page_result] if as_model else page_result,
-            current_page=page,
-            next_page=page_result.paging.bookmark_next
-            if page_result.paging.has_next
-            else None,
-            previous_page=page_result.paging.bookmark_previous
-            if page_result.paging.has_previous
-            else None,
+        self, page: Any = None, page_size: int = 100, as_model: bool = True, **kwargs
+    ) -> BasePage[Model]:
+        return await self.paginator.paginate(
+            page=page, page_size=page_size, as_model=as_model, **kwargs
         )

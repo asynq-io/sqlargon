@@ -1,4 +1,5 @@
 import re
+from typing import TypeVar
 
 from sqlalchemy import MetaData
 from sqlalchemy.orm import declarative_base, declared_attr
@@ -38,3 +39,5 @@ naming_convention = {
 Base = declarative_base(
     cls=ORMModel, metadata=MetaData(naming_convention=naming_convention)
 )
+
+Model = TypeVar("Model", bound=ORMModel)
