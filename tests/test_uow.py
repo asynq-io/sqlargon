@@ -1,7 +1,10 @@
+from typing import Any
+
+from sqlargon import Database
 from sqlargon.uow import SQLAlchemyUnitOfWork
 
 
-async def test_uow(db, user_repository_class):
+async def test_uow(db: Database, user_repository_class: Any) -> None:
     class TestUow(SQLAlchemyUnitOfWork):
         users: user_repository_class
 
@@ -10,7 +13,7 @@ async def test_uow(db, user_repository_class):
     assert uow.users.db is db
 
 
-async def test_uow_context_manager(db, user_repository_class):
+async def test_uow_context_manager(db: Database, user_repository_class: Any) -> None:
     class TestUow(SQLAlchemyUnitOfWork):
         users: user_repository_class
 

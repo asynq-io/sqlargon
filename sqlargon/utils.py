@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from hashlib import md5
 from typing import Any
 
 from pydantic_core import to_jsonable_python
@@ -24,3 +25,13 @@ except ImportError:
 
 def utc_now() -> datetime:
     return datetime.now(tz=timezone.utc)
+
+
+INT64_SIZE = 2**63 - 1
+
+
+def key_to_int(key: str) -> int:
+    return (
+        int(md5(key.encode("utf-8"), usedforsecurity=False).hexdigest(), 16)
+        % INT64_SIZE
+    )
