@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import AsyncGenerator, Awaitable, Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Sequence
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
@@ -11,9 +11,10 @@ from sqlalchemy import Executable
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from typing_extensions import ParamSpec
 
+from .locks import Locker, default_lock, postgresql_locker
 from .orm import Base
 from .settings import DatabaseSettings
-from .utils import json_dumps, json_loads
+from .utils import json_dumps, json_loads, key_to_int
 
 try:
     from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
@@ -40,6 +41,7 @@ class Database:
     update = staticmethod(sa.update)
     delete = staticmethod(sa.delete)
     select = staticmethod(sa.select)
+    locker: Locker
 
     def __init__(
         self,
@@ -64,12 +66,15 @@ class Database:
         )
 
         dialect = self.engine.url.get_dialect().name
+        self.locker = default_lock
+
         if dialect == "postgresql":
             from sqlalchemy.dialects.postgresql import insert
 
             self.insert = insert
             self.supports_returning = True
             self.supports_on_conflict = True
+            self.locker = postgresql_locker
 
         elif dialect == "sqlite":
             import sqlite3
@@ -233,3 +238,26 @@ class Database:
 
     def inject_uow(self, cls: type[SQLAlchemyUnitOfWork], name: str = "uow"):
         return self._inject_object(cls, name)
+
+    def with_lock(self, key: str | int):
+        async def wrapper(func):
+            @functools.wraps(func)
+            async def wrapped(*args, **kwargs):
+                async with self.acquire_lock(key):
+                    return await func(*args, **kwargs)
+
+            return wrapped
+
+        return wrapper
+
+    @asynccontextmanager
+    async def acquire_lock(self, key: int | str) -> AsyncIterator[None]:
+        if isinstance(key, str):
+            key = key_to_int(key)
+
+        if self.current_session:
+            async with self.locker(self.current_session, key):
+                yield
+        else:
+            async with self.session() as session, self.locker(session, key):
+                yield

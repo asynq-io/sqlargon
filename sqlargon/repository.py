@@ -29,7 +29,7 @@ if TYPE_CHECKING:
         _OnClauseArgument,
     )
 
-    from . import Database
+    from .db import Database
 
 D = TypeVar("D", bound=Any)
 _T = TypeVar("_T", bound=Any)
