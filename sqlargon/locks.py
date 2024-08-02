@@ -21,12 +21,6 @@ async def default_lock(_session: AsyncSession, _key: int) -> AsyncIterator[None]
 
 @asynccontextmanager
 async def postgresql_locker(session: AsyncSession, key: int) -> AsyncIterator[None]:
-    try:
-        await session.execute(text("SELECT pg_advisory_lock(:key)"), {"key": key})
-        yield
-        await session.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": key})
-    except:  # noqa
-        await session.rollback()
-        raise
-    finally:
-        await session.close()
+    await session.execute(text("SELECT pg_advisory_lock(:key)"), {"key": key})
+    yield
+    await session.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": key})

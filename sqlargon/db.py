@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Sequence
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
@@ -251,7 +251,7 @@ class Database:
         return wrapper
 
     @asynccontextmanager
-    async def acquire_lock(self, key: int | str) -> AsyncIterator[None]:
+    async def acquire_lock(self, key: int | str):
         if isinstance(key, str):
             key = key_to_int(key)
 
