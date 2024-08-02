@@ -1,11 +1,9 @@
 [tool.poetry]
 name = "sqlargon"
-version = "0.4.4"
+version = "0.4.5"
 description = "SQLAlchemy utils for Postgres and Sqlite"
 readme = "README.md"
-authors = [
-    "Radzim Kowalow <rarha_eu@protonmail.com>"
-]
+authors = ["Radzim Kowalow <rarha_eu@protonmail.com>"]
 
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4.0"
@@ -15,8 +13,8 @@ aiosqlite = "^0.19.0"
 sqlalchemy = ">2.0,<3"
 pydantic = ">=2.0,<3"
 pydantic-settings = "^2.1.0"
-orjson = {version = "*", optional = true}
-opentelemetry-instrumentation-sqlalchemy = {version = "*", optional = true}
+orjson = { version = "*", optional = true }
+opentelemetry-instrumentation-sqlalchemy = { version = "*", optional = true }
 sqlakeyset = "^2.0.1716332987"
 
 [tool.poetry.extras]
@@ -45,14 +43,12 @@ watchdog = ">=2.0,<4.0"
 mkdocs-material = "^9.5.9"
 mkdocs-autorefs = "^0.5.0"
 mkdocs-gen-files = "^0.5.0"
-mkdocstrings = {extras = ["python"], version = "^0.24.0"}
+mkdocstrings = { extras = ["python"], version = "^0.24.0" }
 
 
 [tool.pytest.ini_options]
 addopts = "--cov=./sqlargon --count=3"
-testpaths = [
-   "./tests"
-]
+testpaths = ["./tests"]
 asyncio_mode = "auto"
 
 [tool.mypy]
@@ -66,7 +62,7 @@ no_site_packages = true
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
-    "raise NotImplementedError"
+    "raise NotImplementedError",
 ]
 
 [tool.ruff]
@@ -77,17 +73,17 @@ indent-width = 4
 
 [tool.ruff.lint]
 select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
-    "I",  # isort
-    "C",  # flake8-comprehensions
-    "B",  # flake8-bugbear
-    "UP", # pyupgrade
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "C",   # flake8-comprehensions
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
     "SIM", # flake8-simplify
 ]
 ignore = [
-    "B008",  # do not perform function calls in argument defaults
+    "B008", # do not perform function calls in argument defaults
     "E501", # line too long
 ]
 fixable = ["ALL"]
@@ -106,18 +102,21 @@ max-complexity = 8
 
 [tool.deptry.per_rule_ignores]
 DEP001 = ["opentelemetry"]
-DEP002 = ["alembic", "asyncpg", "aiosqlite", "opentelemetry-instrumentation-sqlalchemy"]
+DEP002 = [
+    "alembic",
+    "asyncpg",
+    "aiosqlite",
+    "opentelemetry-instrumentation-sqlalchemy",
+]
 DEP003 = ["sqlargon", "typing_extensions", "pydantic_core"]
 
 
 [tool.semantic_release]
-version_variable = [
-    'sqlargon/_version.py:__version__',
-]
+version_variable = ['sqlargon/_version.py:__version__']
 version_toml = 'pyproject.toml:tool.poetry.version'
 version_pattern = [
     'docs/index.md:Version: (\d+\.\d+\.\d+)',
-    'README.md:Version: (\d+\.\d+\.\d+)'
+    'README.md:Version: (\d+\.\d+\.\d+)',
 ]
 upload_to_repository = false
 major_on_zero = true

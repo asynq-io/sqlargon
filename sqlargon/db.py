@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Sequence
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
