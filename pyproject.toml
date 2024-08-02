@@ -4,7 +4,7 @@ version = "0.4.4"
 description = "SQLAlchemy utils for Postgres and Sqlite"
 readme = "README.md"
 authors = [
-    "Radzim Kowalow <radzim.kowalow@performance-media.pl>"
+    "Radzim Kowalow <rarha_eu@protonmail.com>"
 ]
 
 [tool.poetry.dependencies]

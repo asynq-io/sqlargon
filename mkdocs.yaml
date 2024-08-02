@@ -17,7 +17,7 @@ theme:
   - search.highlight
   - content.tabs.link
 repo_name: sqlargon
-repo_url: https://github.com/performancemedia/sqlargon
+repo_url: https://github.com/asynq-io/sqlargon
 nav:
   - "SQLArgon": index.md
   - "Alembic Migrations": migrations.md

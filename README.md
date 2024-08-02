@@ -1,8 +1,8 @@
 # SQLArgon
 
-![CI](https://github.com/performancemedia/sqlargon/workflows/CI/badge.svg)
-![Build](https://github.com/performancemedia/sqlargon/workflows/Publish/badge.svg)
-![License](https://img.shields.io/github/license/performancemedia/sqlargon)
+![CI](https://github.com/asynq-io/sqlargon/workflows/CI/badge.svg)
+![Build](https://github.com/asynq-io/sqlargon/workflows/Publish/badge.svg)
+![License](https://img.shields.io/github/license/asynq-io/sqlargon)
 ![Python](https://img.shields.io/pypi/pyversions/sqlargon)
 ![Format](https://img.shields.io/pypi/format/sqlargon)
 ![PyPi](https://img.shields.io/pypi/v/sqlargon)
@@ -16,9 +16,9 @@
 ---
 Version: 0.4.4
 
-Documentation: https://performancemedia.github.io/sqlargon/
+Documentation: https://asynq-io.github.io/sqlargon/
 
-Repository: https://github.com/performancemedia/sqlargon
+Repository: https://github.com/asynq-io/sqlargon
 
 ---
 
