@@ -251,7 +251,7 @@ class Database:
         return wrapper
 
     @asynccontextmanager
-    async def acquire_lock(self, key: int | str) -> AsyncIterator[None]:
+    async def acquire_lock(self, key: int | str):
         if isinstance(key, str):
             key = key_to_int(key)
 
