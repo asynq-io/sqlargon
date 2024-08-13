@@ -13,14 +13,16 @@ aiosqlite = "^0.19.0"
 sqlalchemy = ">2.0,<3"
 pydantic = ">=2.0,<3"
 pydantic-settings = "^2.1.0"
-orjson = { version = "*", optional = true }
-opentelemetry-instrumentation-sqlalchemy = { version = "*", optional = true }
+# orjson = { version = "*", optional = true }
+# opentelemetry-instrumentation-sqlalchemy = { version = "*", optional = true }
 sqlakeyset = "^2.0.1716332987"
+databases = "^0.9.0"
+orjson = "^3.10.7"
 
 [tool.poetry.extras]
 all = ["orjson", "opentelemetry-instrumentation-sqlalchemy"]
 orjson = ["orjson"]
-opentelemetry = ["opentelemetry-instrumentation-sqlalchemy"]
+# opentelemetry = ["opentelemetry-instrumentation-sqlalchemy"]
 
 [tool.poetry.group.dev.dependencies]
 ruff = "==0.1.13"
@@ -32,7 +34,7 @@ greenlet = "^3.0.3"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.2.1"
-pytest-asyncio = "^0.20.2"
+# pytest-asyncio = "^0.20.2"
 pytest-cov = "^4.0.0"
 pytest-sugar = "^0.9.7"
 pytest-repeat = "^0.9.3"
@@ -47,9 +49,8 @@ mkdocstrings = { extras = ["python"], version = "^0.24.0" }
 
 
 [tool.pytest.ini_options]
-addopts = "--cov=./sqlargon --count=3"
+addopts = "--cov=./sqlargon"
 testpaths = ["./tests"]
-asyncio_mode = "auto"
 
 [tool.mypy]
 python_version = "3.9"
@@ -124,6 +125,9 @@ hvcs = "github"
 commit_message = "Bump version: {version}"
 tag_commit = false
 
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from hashlib import md5
 from typing import Any
@@ -10,7 +12,7 @@ try:
     def json_dumps(data: Any) -> str:
         return orjson.dumps(data, default=to_jsonable_python).decode("utf-8")
 
-    def json_loads(data: str) -> Any:
+    def json_loads(data: str | bytes) -> Any:
         return orjson.loads(data)
 
 except ImportError:
@@ -19,7 +21,7 @@ except ImportError:
     def json_dumps(data: Any) -> str:
         return json.dumps(data, default=to_jsonable_python)
 
-    def json_loads(data: str) -> Any:
+    def json_loads(data: str | bytes) -> Any:
         return json.loads(data)
 
 

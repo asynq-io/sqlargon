@@ -8,17 +8,16 @@ from sqlalchemy import FetchedValue
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, declarative_mixin
 
-from .types import GUID, GenerateUUID, Timestamp, now
+from .types import Timestamp, now
 from .utils import utc_now
 
 
 @declarative_mixin
 class UUIDModelMixin:
     id: Mapped[UUID] = sa.Column(
-        GUID(),
+        sa.UUID(as_uuid=True),
         primary_key=True,
         default=uuid4,
-        server_default=GenerateUUID(),
         nullable=False,
     )
 

@@ -1,54 +1,57 @@
-import asyncio
 from uuid import uuid4
 
 import pytest
-import pytest_asyncio
 import sqlalchemy as sa
 
-from sqlargon import Database, SQLAlchemyRepository
-from sqlargon.types import GUID, GenerateUUID
+from sqlargon import Base, Database, SQLAlchemyRepository, SQLAlchemyUnitOfWork
+from sqlargon.mixins import UUIDModelMixin
+from sqlargon.repository import OnConflict
 
 
-@pytest_asyncio.fixture(scope="session")
-def event_loop():
-    return asyncio.new_event_loop()
+class User(Base, UUIDModelMixin):  # type: ignore[name-defined]
+    __tablename__ = "user"
+    # id = sa.Column(
+    #     GUID(), primary_key=True, nullable=False
+    # )
+    name = sa.Column(sa.Unicode(255))
+    last_name = sa.Column(sa.Unicode(255), nullable=True)
 
 
-@pytest_asyncio.fixture(scope="session")
-def db():
-    return Database.from_env()
+class UserRepository(SQLAlchemyRepository[User]):
+    default_order_by = User.name.desc()
+
+    @property
+    def on_conflict(self) -> OnConflict:
+        return {"set_": {"name"}, "index_elements": ["name"]}
 
 
-@pytest_asyncio.fixture(scope="session")
-def user_model(db: Database):
-    class User(db.Model):  # type: ignore[name-defined]
-        __tablename__ = "user"
-        id = sa.Column(
-            GUID(), primary_key=True, server_default=GenerateUUID(), nullable=False
-        )
-        name = sa.Column(sa.Unicode(255))
-        last_name = sa.Column(sa.Unicode(255), nullable=True)
-
-    yield User
+@pytest.fixture(scope="session", autouse=True)
+def anyio_backend():
+    return "asyncio"
 
 
-@pytest_asyncio.fixture()
-async def user_repository_class(user_model, db):
-    class UserRepository(SQLAlchemyRepository[user_model]):
-        default_order_by = user_model.name.desc()
-
-        @property
-        def on_conflict(self):
-            return {"set_": {"name"}, "index_elements": ["id"]}
-
-    await db.create_all()
-    yield UserRepository
-    await db.drop_all()
+@pytest.fixture
+async def db():
+    db_ = Database(url="sqlite+aiosqlite:///:memory:", force_rollback=True)
+    await db_.connect()
+    await db_.create_all()
+    yield db_
+    await db_.drop_all()
+    await db_.disconnect()
+    # return Database.from_env()
 
 
-@pytest_asyncio.fixture()
-async def user_repository(user_repository_class, db):
-    yield user_repository_class(db)
+@pytest.fixture
+def user_repository(db):
+    return UserRepository(db)
+
+
+@pytest.fixture
+def user_uow(db):
+    class TestUow(SQLAlchemyUnitOfWork):
+        users: UserRepository
+
+    return TestUow(db)
 
 
 @pytest.fixture

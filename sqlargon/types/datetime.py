@@ -28,9 +28,7 @@ class Timestamp(TypeDecorator):
         if value is None:
             return None
         else:
-            if value.tzinfo is None:
-                raise ValueError("Timestamps must have a timezone.")
-            elif dialect.name == "sqlite":
+            if value.tzinfo is None or dialect.name == "sqlite":
                 return value.replace(tzinfo=timezone.utc)
             else:
                 return value
