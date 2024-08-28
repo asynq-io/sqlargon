@@ -9,8 +9,9 @@ async def test_uow(db: Database, user_repository_class: Any) -> None:
         users: user_repository_class
 
     uow = TestUow(db)
-    assert isinstance(uow.users, user_repository_class)
-    assert uow.users.db is db
+    async with uow:
+        assert isinstance(uow.users, user_repository_class)
+        assert uow.users.db is db
 
 
 async def test_uow_context_manager(db: Database, user_repository_class: Any) -> None:

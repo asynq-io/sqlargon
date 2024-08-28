@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sqlargon"
-version = "0.4.5"
+version = "0.5.0"
 description = "SQLAlchemy utils for Postgres and Sqlite"
 readme = "README.md"
 authors = ["Radzim Kowalow <rarha_eu@protonmail.com>"]
@@ -124,6 +124,9 @@ hvcs = "github"
 commit_message = "Bump version: {version}"
 tag_commit = false
 
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

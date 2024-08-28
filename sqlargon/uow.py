@@ -2,18 +2,16 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Any, TypeVar, get_type_hints
+from typing import Any, get_type_hints
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlargon import Database, SQLAlchemyRepository
 
-U = TypeVar("U", bound="AbstractUnitOfWork")
-
 
 class AbstractUnitOfWork(ABC):
     @abstractmethod
-    async def __aenter__(self: U) -> U:
+    async def __aenter__(self) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -42,37 +40,19 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
         self._repositories: dict[str, SQLAlchemyRepository] = {}
         self._session: AsyncSession | None = None
 
-    async def __aenter__(self):
-        session = self.db.session_maker()
-        self.db.current_session = session
-
     @property
     def session(self) -> AsyncSession:
-        session = self.db.current_session
-        if session is None:
+        if self._session is None:
             raise ValueError("Session not initialized")
-        return session
+        return self._session
 
-    async def _close(self, session: AsyncSession, exc: Exception | None = None) -> None:
-        # session is passed explicitly because _close is called
-        # in another asyncio.task with a different context
-        try:
-            if exc:
-                await session.rollback()
-            elif self.autocommit:
-                try:
-                    await session.commit()
-                except:  # noqa
-                    await session.rollback()
-                    if self.raise_on_exc:
-                        raise
-        finally:
-            await session.close()
+    async def __aenter__(self) -> None:
+        self._session = await self.db.session().__aenter__()
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        task = asyncio.create_task(self._close(self.session, exc_val))
+        task = asyncio.create_task(self.session.__aexit__(exc_type, exc_val, exc_tb))
         await asyncio.shield(task)
-        self.db.current_session = None
+        self._session = None
 
     async def commit(self) -> None:
         try:
@@ -92,5 +72,5 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
             repository_cls = get_type_hints(self).get(item)
             if repository_cls is None:
                 raise TypeError("Could not resolve type annotation for %s", item)
-            self._repositories[item] = repository_cls(self.db)
+            self._repositories[item] = repository_cls(self.db, self.session)
         return self._repositories[item]

@@ -1,8 +1,15 @@
 from __future__ import annotations
 
-import inspect
-from collections.abc import Coroutine, Generator, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Callable, Generic, TypedDict, TypeVar
+from collections.abc import AsyncIterator, Generator, Mapping, Sequence
+from contextlib import asynccontextmanager
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generic,
+    TypedDict,
+    TypeVar,
+)
 
 import sqlalchemy as sa
 from sqlalchemy import (
@@ -13,7 +20,7 @@ from sqlalchemy import (
     Select,
     bindparam,
 )
-from sqlalchemy.ext.asyncio import AsyncScalarResult
+from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import joinedload, load_only
 from typing_extensions import Self
 
@@ -46,45 +53,51 @@ class OnConflict(TypedDict, total=False):
 class SQLAlchemyRepository(Generic[Model]):
     model: type[Model]
     default_order_by: str | _ColumnExpressionArgument[_T] | None = None
-    default_execution_options: tuple[tuple, dict] = ((), {})
     default_page_size: int = 100
     paginator: PaginationStrategy = TokenPaginationStrategy()
-
     _default_set = None
 
-    __slots__ = ("db", "_query")
+    __slots__ = ("db", "_query", "_session")
 
-    def __init_subclass__(cls, **kwargs):
-        if not (inspect.isabstract(cls) or hasattr(cls, "model")):
-            cls.model = cls.__orig_bases__[0].__args__[0]
-            if not (cls.model and issubclass(cls.model, ORMModel)):
+    def __init_subclass__(cls, abstract: bool = False, **kwargs):
+        if not abstract:
+            cls.model = cls.__orig_bases__[0].__args__[0]  # type: ignore[attr-defined]
+            if not issubclass(cls.model, ORMModel):
                 raise TypeError(f"Could not resolve model for {cls.__name__}")
+        super().__init_subclass__(**kwargs)
 
     def __init__(
         self,
         db: Database,
-        query: ClauseElement | Callable = None,
+        session: AsyncSession | None = None,
+        query: ClauseElement | Callable | None = None,
     ):
         self.db = db
+        self._session = session
         self._query = query
+
+    @asynccontextmanager
+    async def session(self) -> AsyncIterator[AsyncSession]:
+        if self._session:
+            yield self._session
+        else:
+            async with self.db.session() as session:
+                yield session
 
     @property
     def raw_query(self) -> str:
         return str(self.query)
 
     def copy(self, query: ClauseElement | Executable | Callable) -> Self:
-        return self.__class__(self.db, query)
+        return self.__class__(self.db, self._session, query)
 
     def __call__(self, *args, **kwargs) -> Self:
-        self._query = self._query(*args, **kwargs)
+        self._query = self._query(*args, **kwargs)  # type: ignore[misc]
         return self
 
     def __getattr__(self, item: str) -> Self:
         self._query = getattr(self._query, item)
         return self
-
-    def __aiter__(self) -> Coroutine[Any, Any, AsyncScalarResult[Any]]:
-        return self.db.stream_scalars(self.query)
 
     def __await__(self) -> Generator[Any, None, Result]:
         return self.execute().__await__()
@@ -129,7 +142,7 @@ class SQLAlchemyRepository(Generic[Model]):
         if len(args) == 0:
             args = (self.model,)
         query = self._select(*args)
-        if self.default_order_by is not None:
+        if type(self).default_order_by is not None:
             query = query.order_by(self.default_order_by)
         return query
 
@@ -242,13 +255,20 @@ class SQLAlchemyRepository(Generic[Model]):
         return (await self.execute_query(query)).scalar()
 
     async def execute_many(self, queries: Sequence[Executable], *args, **kwargs):
-        return await self.db.execute_many(queries, *args, **kwargs)
+        async with self.session() as session:
+            return (await session.execute(query, *args, **kwargs) for query in queries)
 
     async def execute_query(self, query: Executable, *args, **kwargs) -> Result:
-        return await self.db.execute(query, *args, **kwargs)
+        async with self.session() as session:
+            return await session.execute(query, *args, **kwargs)
 
     async def execute(self) -> Result:
         return await self.execute_query(self.query)
+
+    async def stream(self, *args, **kwargs):
+        async with self.session() as session:
+            async for row in session.stream(self.query, *args, **kwargs):
+                yield row
 
     async def mappings(self) -> MappingResult:
         return (await self.execute()).mappings()
@@ -350,12 +370,10 @@ class SQLAlchemyRepository(Generic[Model]):
             {key if key not in on_ else f"u_{key}": value for key, value in row.items()}
             for row in values
         ]
-        await self.db.execute_from_connection(
-            self._update(self.model).where(*args, *where), values
-        )
-
-    async def commit(self) -> None:
-        await self.db.commit()
+        query = self._update(self.model).where(*args, *where)
+        async with self.session() as session:
+            connection = await session.connection()
+            await connection.execute(query, values)
 
     async def get_page(
         self, page: Any = None, page_size: int = 100, as_model: bool = True, **kwargs
