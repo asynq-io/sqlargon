@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sqlargon"
-version = "0.4.5"
+version = "0.5.0"
 description = "SQLAlchemy utils for Postgres and Sqlite"
 readme = "README.md"
 authors = ["Radzim Kowalow <rarha_eu@protonmail.com>"]
