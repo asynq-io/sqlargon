@@ -6,6 +6,7 @@ import pytest_asyncio
 import sqlalchemy as sa
 
 from sqlargon import Database, SQLAlchemyRepository
+from sqlargon.repository import OnConflict
 from sqlargon.types import GUID, GenerateUUID
 
 
@@ -38,7 +39,7 @@ async def user_repository_class(user_model, db):
         default_order_by = user_model.name.desc()
 
         @property
-        def on_conflict(self):
+        def on_conflict(self) -> OnConflict:
             return {"set_": {"name"}, "index_elements": ["id"]}
 
     await db.create_all()

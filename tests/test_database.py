@@ -17,5 +17,5 @@ def test_sqlite_version():
 
 
 async def test_locks(db: Database):
-    async with db.acquire_lock("test"):
+    async with db.lock("test"):
         assert 1 == 1

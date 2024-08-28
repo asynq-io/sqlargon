@@ -124,6 +124,9 @@ hvcs = "github"
 commit_message = "Bump version: {version}"
 tag_commit = false
 
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
