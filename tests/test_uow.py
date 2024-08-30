@@ -1,7 +1,11 @@
 from typing import Any
 
+import pytest
+
 from sqlargon import Database
 from sqlargon.uow import SQLAlchemyUnitOfWork
+
+pytestmark = pytest.mark.anyio
 
 
 async def test_uow(db: Database, user_repository_class: Any) -> None:

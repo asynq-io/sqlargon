@@ -1,4 +1,8 @@
+import pytest
+
 from sqlargon.pagination import NumberedPaginationStrategy, TokenPaginationStrategy
+
+pytestmark = pytest.mark.anyio
 
 
 async def test_paginate_empty_repository_with_numbered_pagination(user_repository):

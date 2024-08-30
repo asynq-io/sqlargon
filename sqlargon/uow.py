@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 from abc import ABC, abstractmethod
 from typing import Any, get_type_hints
 
+import anyio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlargon import Database, SQLAlchemyRepository
@@ -49,8 +49,8 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
         self._session = self.db.session_maker()
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        task = asyncio.create_task(self.close(exc_val))
-        await asyncio.shield(task)
+        with anyio.CancelScope(shield=True):
+            await self.close(exc_val)
 
     async def close(self, exc: Exception | None) -> None:
         try:

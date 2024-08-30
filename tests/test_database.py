@@ -1,3 +1,5 @@
+import pytest
+
 from sqlargon import Database
 
 
@@ -16,6 +18,7 @@ def test_sqlite_version():
     assert sqlite3.sqlite_version > "3.35"
 
 
+@pytest.mark.anyio
 async def test_locks(db: Database):
     async with db.lock("test"):
         assert 1 == 1
