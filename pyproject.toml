@@ -13,9 +13,9 @@ aiosqlite = "^0.19.0"
 sqlalchemy = ">2.0,<3"
 pydantic = ">=2.0,<3"
 pydantic-settings = "^2.1.0"
+sqlakeyset = "^2.0.1716332987"
 orjson = { version = "*", optional = true }
 opentelemetry-instrumentation-sqlalchemy = { version = "*", optional = true }
-sqlakeyset = "^2.0.1716332987"
 
 [tool.poetry.extras]
 all = ["orjson", "opentelemetry-instrumentation-sqlalchemy"]

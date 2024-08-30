@@ -31,6 +31,7 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
     def __init__(
         self,
         db: Database,
+        *,
         raise_on_exc: bool = True,
     ) -> None:
         self.db = db
@@ -53,10 +54,10 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
 
     async def close(self, exc: Exception | None) -> None:
         try:
-            if exc is not None:
-                await self.rollback()
-            else:
+            if exc is None:
                 await self.commit()
+            else:
+                await self.rollback()
         finally:
             await self.session.close()
             self._session = None
