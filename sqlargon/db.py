@@ -105,6 +105,10 @@ class Database:
             finally:
                 await session.close()
 
+    async def execute(self, statement, *args, **kwargs):
+        async with self.session() as session:
+            return await session.execute(statement, *args, **kwargs)
+
     @classmethod
     def from_settings(cls, settings: DatabaseSettings):
         return cls(**settings.to_kwargs())
@@ -129,13 +133,16 @@ class Database:
         return wrapped
 
     def _inject_object(
-        self, cls: type[SQLAlchemyRepository] | type[SQLAlchemyUnitOfWork], name: str
+        self,
+        cls: type[SQLAlchemyRepository] | type[SQLAlchemyUnitOfWork],
+        name: str,
+        **kw: Any,
     ):
         def wrapper(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
             @functools.wraps(func)
             async def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
                 if kwargs.get(name) is None:
-                    instance = cls(self)
+                    instance = cls(self, **kw)
                     kwargs[name] = instance
                 return await func(*args, **kwargs)
 
@@ -144,12 +151,21 @@ class Database:
         return wrapper
 
     def inject_repository(
-        self, cls: type[SQLAlchemyRepository], name: str = "repository"
+        self,
+        cls: type[SQLAlchemyRepository],
+        name: str = "repository",
+        provide_session: bool = False,
     ):
         return self._inject_object(cls, name)
 
-    def inject_uow(self, cls: type[SQLAlchemyUnitOfWork], name: str = "uow"):
-        return self._inject_object(cls, name)
+    def inject_uow(
+        self,
+        cls: type[SQLAlchemyUnitOfWork],
+        name: str = "uow",
+        *,
+        raise_on_exc: bool = True,
+    ):
+        return self._inject_object(cls, name, raise_on_exc=raise_on_exc)
 
     @asynccontextmanager
     async def lock(self, key: str):
