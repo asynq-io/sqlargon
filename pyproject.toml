@@ -1,12 +1,13 @@
 [tool.poetry]
 name = "sqlargon"
-version = "0.5.1"
+version = "0.6.0"
 description = "SQLAlchemy utils for Postgres and Sqlite"
 readme = "README.md"
 authors = ["Radzim Kowalow <rarha_eu@protonmail.com>"]
 
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4.0"
+anyio = ">4,<5"
 alembic = "^1.13.1"
 asyncpg = "^0.29.0"
 aiosqlite = "^0.19.0"
@@ -32,7 +33,6 @@ greenlet = "^3.0.3"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.2.1"
-pytest-asyncio = "^0.20.2"
 pytest-cov = "^4.0.0"
 pytest-sugar = "^0.9.7"
 pytest-repeat = "^0.9.3"
@@ -49,7 +49,6 @@ mkdocstrings = { extras = ["python"], version = "^0.24.0" }
 [tool.pytest.ini_options]
 addopts = "--cov=./sqlargon --count=3"
 testpaths = ["./tests"]
-asyncio_mode = "auto"
 
 [tool.mypy]
 python_version = "3.9"
