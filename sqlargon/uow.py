@@ -31,11 +31,9 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
     def __init__(
         self,
         db: Database,
-        autocommit: bool = True,
         raise_on_exc: bool = True,
     ) -> None:
         self.db = db
-        self.autocommit = autocommit
         self.raise_on_exc = raise_on_exc
         self._repositories: dict[str, SQLAlchemyRepository] = {}
         self._session: AsyncSession | None = None
@@ -47,12 +45,21 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
         return self._session
 
     async def __aenter__(self) -> None:
-        self._session = await self.db.session().__aenter__()
+        self._session = self.db.session_maker()
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        task = asyncio.create_task(self.session.__aexit__(exc_type, exc_val, exc_tb))
+        task = asyncio.create_task(self.close(exc_val))
         await asyncio.shield(task)
-        self._session = None
+
+    async def close(self, exc: Exception | None) -> None:
+        try:
+            if exc is not None:
+                await self.rollback()
+            else:
+                await self.commit()
+        finally:
+            await self.session.close()
+            self._session = None
 
     async def commit(self) -> None:
         try:

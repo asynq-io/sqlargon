@@ -105,6 +105,10 @@ class Database:
             finally:
                 await session.close()
 
+    async def execute(self, statement, *args, **kwargs):
+        async with self.session() as session:
+            return await session.execute(statement, *args, **kwargs)
+
     @classmethod
     def from_settings(cls, settings: DatabaseSettings):
         return cls(**settings.to_kwargs())

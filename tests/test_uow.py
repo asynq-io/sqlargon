@@ -22,3 +22,13 @@ async def test_uow_context_manager(db: Database, user_repository_class: Any) -> 
     async with uow:
         assert isinstance(uow.users, user_repository_class)
         await uow.users.all()
+
+
+async def test_uow_create_user(db: Database, user_repository_class):
+    class TestUow(SQLAlchemyUnitOfWork):
+        users: user_repository_class
+
+    uow = TestUow(db)
+    async with uow:
+        user = await uow.users.create(name="John")
+        assert user.name == "John"
