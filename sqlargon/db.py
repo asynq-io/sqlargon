@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator, Awaitable
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
+import anyio
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from typing_extensions import ParamSpec
@@ -95,14 +96,15 @@ class Database:
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:
-        async with self.session_maker() as session:
-            try:
-                yield session
-                await session.commit()
-            except:  # noqa
-                await session.rollback()
-                raise
-            finally:
+        session = self.session_maker()
+        try:
+            yield session
+            await session.commit()
+        except:  # noqa
+            await session.rollback()
+            raise
+        finally:
+            with anyio.CancelScope(shield=True):
                 await session.close()
 
     async def execute(self, statement, *args, **kwargs):

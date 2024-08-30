@@ -1,5 +1,9 @@
 from uuid import uuid4
 
+import pytest
+
+pytestmark = pytest.mark.anyio
+
 
 async def test_empty_user_repo(user_repository):
     users = await user_repository.all()
