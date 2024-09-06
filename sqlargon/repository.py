@@ -256,7 +256,8 @@ class SQLAlchemyRepository(Generic[Model]):
 
     async def execute_many(self, queries: Sequence[Executable], *args, **kwargs):
         async with self.session() as session:
-            return (await session.execute(query, *args, **kwargs) for query in queries)
+            for query in queries:
+                yield await session.execute(query, *args, **kwargs)
 
     async def execute_query(self, query: Executable, *args, **kwargs) -> Result:
         async with self.session() as session:
