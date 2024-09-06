@@ -134,9 +134,7 @@ class NumberedPaginationStrategy(PaginationStrategy[int]):
                 self.repository.query.subquery()
             )
             queries = (total_records_query, page_query)
-            results = [
-                result async for result in await self.repository.execute_many(queries)
-            ]
+            results = [result async for result in self.repository.execute_many(queries)]
             total_records = results[0].scalar()
             page_result = results[1]
             total_pages = (total_records + page_size - 1) // page_size
