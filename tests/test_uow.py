@@ -36,3 +36,17 @@ async def test_uow_create_user(db: Database, user_repository_class):
     async with uow:
         user = await uow.users.create(name="John")
         assert user.name == "John"
+
+
+async def test_uow_nest(db: Database, user_repository_class: Any) -> None:
+    class TestUow(SQLAlchemyUnitOfWork):
+        users: user_repository_class
+
+    class NestedTestUow(TestUow):
+        nested_users: user_repository_class
+
+    uow = NestedTestUow(db)
+    async with uow:
+        assert isinstance(uow.users, user_repository_class)
+        assert isinstance(uow.nested_users, user_repository_class)
+        assert uow.users.db is db

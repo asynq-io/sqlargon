@@ -77,7 +77,7 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
         if item.startswith("__"):
             return self.__getattribute__(item)
         if item not in self._repositories:
-            repository_cls = get_type_hints(self).get(item)
+            repository_cls = get_type_hints(type(self)).get(item)
             if repository_cls is None:
                 raise TypeError("Could not resolve type annotation for %s", item)
             self._repositories[item] = repository_cls(self.db, self.session)
