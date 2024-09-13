@@ -13,7 +13,7 @@
 *Wrapper around SQLAlchemy async session, core and native features for Postgres/SQLite*
 
 ---
-Version: 0.6.1
+Version: 0.6.2
 
 Docs: [https://asynq-io.github.io/sqlargon/](https://asynq-io.github.io/sqlargon/)
 
