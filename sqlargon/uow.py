@@ -3,7 +3,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, get_type_hints
 
-import anyio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlargon import Database, SQLAlchemyRepository
@@ -49,8 +48,7 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
         self._session = self.db.session_maker()
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        with anyio.CancelScope(shield=True):
-            await self.close(exc_val)
+        await self.close(exc_val)
 
     async def close(self, exc: Exception | None) -> None:
         try:
@@ -59,8 +57,9 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
             else:
                 await self.rollback()
         finally:
-            await self.session.close()
+            session = self.session
             self._session = None
+            await session.close()
 
     async def commit(self) -> None:
         try:

@@ -6,7 +6,6 @@ from collections.abc import AsyncIterator, Awaitable
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
-import anyio
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from typing_extensions import ParamSpec
@@ -104,8 +103,7 @@ class Database:
             await session.rollback()
             raise
         finally:
-            with anyio.CancelScope(shield=True):
-                await session.close()
+            await session.close()
 
     async def execute(self, statement, *args, **kwargs):
         async with self.session() as session:
