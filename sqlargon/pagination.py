@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, Union
+from typing import TYPE_CHECKING, Generic, TypeVar, Union
 
 from sqlakeyset import unserialize_bookmark
 from sqlakeyset.paging import (
@@ -61,9 +61,6 @@ class PaginationStrategy(Generic[P], ABC):
             return self.__class__(instance)
         return self
 
-    def _convert_to_models(self, page_result: Any) -> list[Model]:
-        return [p[0] for p in page_result]
-
     @abstractmethod
     async def paginate(
         self,
@@ -106,7 +103,7 @@ class TokenPaginationStrategy(PaginationStrategy[Union[str, None]]):
             current_place=place,
         )
         return TokenPage(
-            items=self._convert_to_models(page_result) if as_model else page_result,
+            items=page_result.all() if as_model else page_result.mappings().all(),
             current_page=page,
             next_page=page_result.paging.bookmark_next
             if page_result.paging.has_next
@@ -143,7 +140,7 @@ class NumberedPaginationStrategy(PaginationStrategy[int]):
             total_pages = None
             page_result = await self.repository.execute_query(page_query)
 
-        items = self._convert_to_models(page_result) if as_model else page_result
+        items = page_result.all() if as_model else page_result.mappings().all()
 
         return NumberedPage(
             items=items,
