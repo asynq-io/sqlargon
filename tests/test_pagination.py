@@ -1,12 +1,30 @@
 import pytest
 
-from sqlargon.pagination import NumberedPaginationStrategy, TokenPaginationStrategy
+from sqlargon.pagination import (
+    NumberedPaginationStrategy,
+    PaginationStrategy,
+    TokenPaginationStrategy,
+)
 
 pytestmark = pytest.mark.anyio
 
 
-async def test_paginate_empty_repository_with_numbered_pagination(user_repository):
-    user_repository.paginator = NumberedPaginationStrategy(user_repository)
+def get_user_repository(
+    user_repository_class, db, paginator_class: type[PaginationStrategy]
+):
+    class Repository(user_repository_class):
+        paginator = paginator_class()
+
+    user_repository = Repository(db)
+    return user_repository
+
+
+async def test_paginate_empty_repository_with_numbered_pagination(
+    user_repository_class, db
+):
+    user_repository = get_user_repository(
+        user_repository_class, db, NumberedPaginationStrategy
+    )
     page = await user_repository.get_page(page=1)
     assert len(page.items) == 0
     assert page.current_page == 1
@@ -15,8 +33,10 @@ async def test_paginate_empty_repository_with_numbered_pagination(user_repositor
     assert page.total_items == 0
 
 
-async def test_paginate_repository_with_numbered_pagination(user_repository):
-    user_repository.paginator = NumberedPaginationStrategy(user_repository)
+async def test_paginate_repository_with_numbered_pagination(user_repository_class, db):
+    user_repository = get_user_repository(
+        user_repository_class, db, NumberedPaginationStrategy
+    )
     users = [
         {"name": "John"},
         {"name": "Vincent"},
@@ -39,9 +59,11 @@ async def test_paginate_repository_with_numbered_pagination(user_repository):
 
 
 async def test_paginate_repository_with_numbered_pagination_without_model(
-    user_repository, user_model
+    user_model, user_repository_class, db
 ):
-    user_repository.paginator = NumberedPaginationStrategy(user_repository)
+    user_repository = get_user_repository(
+        user_repository_class, db, NumberedPaginationStrategy
+    )
     users = [
         {"name": "John"},
         {"name": "Vincent"},
@@ -67,15 +89,21 @@ async def test_paginate_repository_with_numbered_pagination_without_model(
     assert page2.total_items == 3
 
 
-async def test_paginate_empty_repository_with_token_pagination(user_repository):
-    user_repository.paginator = TokenPaginationStrategy(user_repository)
+async def test_paginate_empty_repository_with_token_pagination(
+    user_repository_class, db
+):
+    user_repository = get_user_repository(
+        user_repository_class, db, TokenPaginationStrategy
+    )
     page = await user_repository.get_page()
     assert len(page.items) == 0
     assert page.next_page is None
 
 
-async def test_paginate_repository_with_token_pagination(user_repository):
-    user_repository.paginator = TokenPaginationStrategy(user_repository)
+async def test_paginate_repository_with_token_pagination(user_repository_class, db):
+    user_repository = get_user_repository(
+        user_repository_class, db, TokenPaginationStrategy
+    )
 
     users = [
         {"name": "John"},
@@ -92,9 +120,11 @@ async def test_paginate_repository_with_token_pagination(user_repository):
 
 
 async def test_paginate_repository_with_token_pagination_without_model(
-    user_repository, user_model
+    user_model, user_repository_class, db
 ):
-    user_repository.paginator = TokenPaginationStrategy(user_repository)
+    user_repository = get_user_repository(
+        user_repository_class, db, TokenPaginationStrategy
+    )
 
     users = [
         {"name": "John"},
