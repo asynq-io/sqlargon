@@ -61,9 +61,6 @@ class PaginationStrategy(Generic[P], ABC):
             return self.__class__(instance)
         return self
 
-    def _convert_to_models(self, page_result: Any) -> list[Model]:
-        return [p[0] for p in page_result]
-
     @abstractmethod
     async def paginate(
         self,
@@ -76,6 +73,9 @@ class PaginationStrategy(Generic[P], ABC):
 
 
 class TokenPaginationStrategy(PaginationStrategy[Union[str, None]]):
+    def _convert_to_models(self, page_result: Any) -> list[Model]:
+        return [p[0] for p in page_result]
+
     async def paginate(
         self,
         page: str | None = None,
@@ -143,7 +143,7 @@ class NumberedPaginationStrategy(PaginationStrategy[int]):
             total_pages = None
             page_result = await self.repository.execute_query(page_query)
 
-        items = self._convert_to_models(page_result) if as_model else page_result
+        items = page_result.all() if as_model else page_result.mappings().all()
 
         return NumberedPage(
             items=items,
