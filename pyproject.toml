@@ -31,10 +31,11 @@ python-semantic-release = "^7.33.2"
 greenlet = "^3.0.3"
 
 [tool.poetry.group.test.dependencies]
-pytest = "^7.2.1"
+pytest = "^8.3.3"
 pytest-cov = "^4.0.0"
 pytest-sugar = "^0.9.7"
 pytest-repeat = "^0.9.3"
+pytest-asyncio = "^0.24.0"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = "^1.5.3"
@@ -48,6 +49,8 @@ mkdocstrings = { extras = ["python"], version = "^0.24.0" }
 [tool.pytest.ini_options]
 addopts = "--cov=./sqlargon --count=3"
 testpaths = ["./tests"]
+
+asyncio_mode = "auto"
 
 [tool.mypy]
 python_version = "3.9"
