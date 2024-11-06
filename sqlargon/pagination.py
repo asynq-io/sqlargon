@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, Union
+from typing import TYPE_CHECKING, Generic, TypeVar, Union
 
 from sqlakeyset import unserialize_bookmark
 from sqlakeyset.paging import (
@@ -11,7 +11,7 @@ from sqlakeyset.paging import (
     prepare_paging,
 )
 from sqlalchemy import (
-    Row,
+    RowMapping,
     Select,
     func,
 )
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class BasePage(Generic[Model]):
-    items: Sequence[Model] | Sequence[Row]
+    items: Sequence[Model] | Sequence[RowMapping]
 
 
 @dataclass
@@ -73,9 +73,6 @@ class PaginationStrategy(Generic[P], ABC):
 
 
 class TokenPaginationStrategy(PaginationStrategy[Union[str, None]]):
-    def _convert_to_models(self, page_result: Any) -> list[Model]:
-        return [p[0] for p in page_result]
-
     async def paginate(
         self,
         page: str | None = None,
@@ -105,8 +102,10 @@ class TokenPaginationStrategy(PaginationStrategy[Union[str, None]]):
             backwards,
             current_place=place,
         )
+        items = [p[0] if as_model else p._mapping for p in page_result]
+
         return TokenPage(
-            items=self._convert_to_models(page_result) if as_model else page_result,
+            items=items,
             current_page=page,
             next_page=page_result.paging.bookmark_next
             if page_result.paging.has_next
@@ -143,7 +142,9 @@ class NumberedPaginationStrategy(PaginationStrategy[int]):
             total_pages = None
             page_result = await self.repository.execute_query(page_query)
 
-        items = page_result.all() if as_model else page_result.mappings().all()
+        items = (
+            page_result.scalars().all() if as_model else page_result.mappings().all()
+        )
 
         return NumberedPage(
             items=items,

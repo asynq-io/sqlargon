@@ -1,4 +1,5 @@
 import pytest
+from sqlalchemy import RowMapping
 
 from sqlargon.pagination import (
     NumberedPaginationStrategy,
@@ -50,12 +51,14 @@ async def test_paginate_repository_with_numbered_pagination(user_repository_clas
     assert page.total_pages == 2
     assert page.total_items == 3
 
+    assert all(isinstance(item, user_repository_class.model) for item in page.items)
     page2 = await user_repository.get_page(page=2, page_size=2)
     assert len(page2.items) == 1
     assert page2.current_page == 2
     assert page2.page_size == 1
     assert page2.total_pages == 2
     assert page2.total_items == 3
+    assert all(isinstance(item, user_repository_class.model) for item in page2.items)
 
 
 async def test_paginate_repository_with_numbered_pagination_without_model(
@@ -78,6 +81,7 @@ async def test_paginate_repository_with_numbered_pagination_without_model(
     assert page.page_size == 2
     assert page.total_pages == 2
     assert page.total_items == 3
+    assert all(isinstance(item, RowMapping) for item in page.items)
 
     page2 = await user_repository.select(user_model.id, user_model.name).get_page(
         page=2, page_size=2, as_model=False
@@ -87,6 +91,7 @@ async def test_paginate_repository_with_numbered_pagination_without_model(
     assert page2.page_size == 1
     assert page2.total_pages == 2
     assert page2.total_items == 3
+    assert all(isinstance(item, RowMapping) for item in page2.items)
 
 
 async def test_paginate_empty_repository_with_token_pagination(
@@ -113,10 +118,12 @@ async def test_paginate_repository_with_token_pagination(user_repository_class, 
     await user_repository.insert(users)
     page = await user_repository.get_page(page_size=2)
     assert len(page.items) == 2
+    assert all(isinstance(item, user_repository_class.model) for item in page.items)
     assert page.next_page == ">s:John"
     page2 = await user_repository.get_page(page=page.next_page)
     assert len(page2.items) == 1
     assert page2.next_page is None
+    assert all(isinstance(item, user_repository_class.model) for item in page.items)
 
 
 async def test_paginate_repository_with_token_pagination_without_model(
@@ -136,9 +143,11 @@ async def test_paginate_repository_with_token_pagination_without_model(
         page_size=2, as_model=False
     )
     assert len(page.items) == 2
+    assert all(isinstance(item, RowMapping) for item in page.items)
     assert page.next_page == ">s:John"
     page2 = await user_repository.select(user_model.id, user_model.name).get_page(
         page=page.next_page, as_model=False
     )
     assert len(page2.items) == 1
     assert page2.next_page is None
+    assert all(isinstance(item, RowMapping) for item in page.items)
