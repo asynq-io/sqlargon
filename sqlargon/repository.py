@@ -201,11 +201,7 @@ class SQLAlchemyRepository(Generic[Model]):
             query = query.returning(self.model)
         kwargs.update(**self.on_conflict)
         if set_ is None:
-            if isinstance(values, Mapping):
-                pk_columns = {c.name for c in self.model.__table__.primary_key.columns}  # type: ignore[attr-defined]
-                set_ = {k for k in values if k not in pk_columns}
-            else:
-                set_ = self.on_conflict.get("set_", self._get_default_set())
+            set_ = self.on_conflict.get("set_", self._get_default_set())
         if set_:
             kwargs["set_"] = {k: getattr(query.excluded, k) for k in set_}
         query = query.on_conflict_do_update(**kwargs)
