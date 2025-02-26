@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, get_type_hints
+from typing import TYPE_CHECKING, Any, get_type_hints
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,12 +72,14 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
     async def rollback(self) -> None:
         await self.session.rollback()
 
-    def __getattr__(self, item: str) -> Any:
-        if item.startswith("__"):
-            return self.__getattribute__(item)
-        if item not in self._repositories:
-            repository_cls = get_type_hints(type(self)).get(item)
-            if repository_cls is None:
-                raise TypeError("Could not resolve type annotation for %s", item)
-            self._repositories[item] = repository_cls(self.db, self.session)
-        return self._repositories[item]
+    if not TYPE_CHECKING:
+
+        def __getattr__(self, item: str) -> Any:
+            if item.startswith("__"):
+                return self.__getattribute__(item)
+            if item not in self._repositories:
+                repository_cls = get_type_hints(type(self)).get(item)
+                if repository_cls is None:
+                    raise TypeError("Could not resolve type annotation for %s", item)
+                self._repositories[item] = repository_cls(self.db, self.session)
+            return self._repositories[item]
