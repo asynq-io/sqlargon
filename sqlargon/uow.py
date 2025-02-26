@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, get_type_hints
+from typing import Any, get_type_hints, no_type_check
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,6 +72,7 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
     async def rollback(self) -> None:
         await self.session.rollback()
 
+    @no_type_check
     def __getattr__(self, item: str) -> Any:
         if item.startswith("__"):
             return self.__getattribute__(item)
