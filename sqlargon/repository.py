@@ -128,9 +128,9 @@ class SQLAlchemyRepository(Generic[Model]):
     def _get_default_set(cls) -> set[str]:
         return {
             c.name
-            for c in cls.model.__table__.columns
+            for c in cls.model.__table__.columns  # type: ignore[attr-defined]
             if c.name not in cls._get_default_index_elements()
-        }  # type: ignore[attr-defined]
+        }
 
     @property
     def on_conflict(self) -> OnConflict:
