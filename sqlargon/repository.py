@@ -22,7 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import joinedload, load_only
-from typing_extensions import Self
+from typing_extensions import NotRequired, Self
 
 from .orm import Model, ORMModel
 from .pagination import BasePage, PaginationStrategy, TokenPaginationStrategy
@@ -39,20 +39,20 @@ if TYPE_CHECKING:
     from .db import Database
 
 D = TypeVar("D", bound=Any)
-_T = TypeVar("_T", bound=Any)
 
 
-class OnConflict(TypedDict, total=False):
-    index_elements: Any | None
-    constraint: str | None
-    index_where: Any | None
-    set_: set[str] | None
-    where: Any | None
+class OnConflict(TypedDict):
+    index_elements: list[str]
+    set_: set[str]
+    constraint: NotRequired[str]
+    index_where: NotRequired[Any]
+    where: NotRequired[Any]
+    exclude_set: NotRequired[set[str]]
 
 
 class SQLAlchemyRepository(Generic[Model]):
     model: type[Model]
-    default_order_by: str | _ColumnExpressionArgument[_T] | None = None
+    default_order_by: str | _ColumnExpressionArgument | None = None
     default_page_size: int = 100
     paginator: PaginationStrategy = TokenPaginationStrategy()
     _default_set = None
@@ -201,7 +201,7 @@ class SQLAlchemyRepository(Generic[Model]):
             query = query.returning(self.model)
         kwargs.update(**self.on_conflict)
         if set_ is None:
-            set_ = self.on_conflict.get("set_", self._get_default_set())
+            set_ = self.on_conflict["set_"] - self.on_conflict.get("exclude_set", set())
         if set_:
             kwargs["set_"] = {k: getattr(query.excluded, k) for k in set_}
         query = query.on_conflict_do_update(**kwargs)
