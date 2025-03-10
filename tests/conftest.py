@@ -38,7 +38,11 @@ async def user_repository_class(user_model, db):
 
         @property
         def on_conflict(self) -> OnConflict:
-            return {"set_": {"name"}, "index_elements": {"id"}}
+            return {
+                "set_": {"name"},
+                "index_elements": {"id"},
+                "exclude_set": {"last_name"},
+            }
 
     await db.create_all()
     yield UserRepository

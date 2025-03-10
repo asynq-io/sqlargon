@@ -46,3 +46,23 @@ async def test_bulk_update(user_repository):
         )
         == 2
     )
+
+
+async def test_upsert(user_repository):
+    users = [
+        {"name": "John", "last_name": "Connor"},
+        {"name": "Vincent", "last_name": "Carter"},
+    ]
+    await user_repository.upsert(users)
+
+    users = [
+        {"name": "John", "last_name": None},
+        {"name": "Vincent", "last_name": None},
+    ]
+    await user_repository.upsert(users)
+    assert (
+        await user_repository.count(
+            user_repository.model.last_name.in_(("Connor", "Carter"))
+        )
+        == 2
+    )
