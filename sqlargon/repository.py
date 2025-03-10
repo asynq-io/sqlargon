@@ -22,7 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import joinedload, load_only
-from typing_extensions import NotRequired, Self
+from typing_extensions import Self
 
 from .orm import Model, ORMModel
 from .pagination import BasePage, PaginationStrategy, TokenPaginationStrategy
@@ -41,13 +41,13 @@ if TYPE_CHECKING:
 D = TypeVar("D", bound=Any)
 
 
-class OnConflict(TypedDict):
-    index_elements: list[str]
+class OnConflict(TypedDict, total=False):
+    index_elements: set[str]
     set_: set[str]
-    constraint: NotRequired[str]
-    index_where: NotRequired[Any]
-    where: NotRequired[Any]
-    exclude_set: NotRequired[set[str]]
+    constraint: str
+    index_where: Any
+    where: Any
+    exclude_set: set[str]
 
 
 class SQLAlchemyRepository(Generic[Model]):
@@ -55,7 +55,6 @@ class SQLAlchemyRepository(Generic[Model]):
     default_order_by: str | _ColumnExpressionArgument | None = None
     default_page_size: int = 100
     paginator: PaginationStrategy = TokenPaginationStrategy()
-    _default_set = None
 
     __slots__ = ("db", "_query", "_session")
 
@@ -119,22 +118,24 @@ class SQLAlchemyRepository(Generic[Model]):
         return self.db.select
 
     @classmethod
-    def _get_default_set(cls) -> set[str]:
-        if cls._default_set is None:
-            pk_columns = {c.name for c in cls.model.__table__.primary_key.columns}
-            cls._default_set = {
-                c.name for c in cls.model.__table__.columns if c.name not in pk_columns
-            }
+    def _get_default_index_elements(cls) -> set[str]:
+        return {
+            c.name
+            for c in cls.model.__table__.primary_key.columns  # type: ignore[attr-defined]
+        }
 
-        return cls._default_set
+    @classmethod
+    def _get_default_set(cls) -> set[str]:
+        return {
+            c.name
+            for c in cls.model.__table__.columns
+            if c.name not in cls._get_default_index_elements()
+        }  # type: ignore[attr-defined]
 
     @property
     def on_conflict(self) -> OnConflict:
         return {
-            "index_elements": [
-                c.name
-                for c in self.model.__table__.primary_key.columns  # type: ignore[attr-defined]
-            ],
+            "index_elements": self._get_default_index_elements(),
             "set_": self._get_default_set(),
         }
 
@@ -180,7 +181,8 @@ class SQLAlchemyRepository(Generic[Model]):
 
         if self.db.supports_on_conflict and ignore_conflicts:
             query = query.on_conflict_do_nothing(
-                index_elements=self.on_conflict["index_elements"],
+                index_elements=self.on_conflict.get("index_elements")
+                or self._get_default_index_elements(),
                 index_where=index_where,
             )
 
@@ -201,7 +203,9 @@ class SQLAlchemyRepository(Generic[Model]):
             query = query.returning(self.model)
         kwargs.update(**self.on_conflict)
         if set_ is None:
-            set_ = self.on_conflict["set_"] - self.on_conflict.get("exclude_set", set())
+            set_ = set(
+                self.on_conflict.get("set_") or self._get_default_index_elements()
+            ) - self.on_conflict.get("exclude_set", set())
         if set_:
             kwargs["set_"] = {k: getattr(query.excluded, k) for k in set_}
         query = query.on_conflict_do_update(**kwargs)
