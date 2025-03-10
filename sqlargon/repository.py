@@ -201,7 +201,9 @@ class SQLAlchemyRepository(Generic[Model]):
         query = self._insert(self.model).values(values)
         if self.db.supports_returning and return_results:
             query = query.returning(self.model)
-        kwargs.update(**self.on_conflict)
+        for key, value in self.on_conflict.items():
+            if key not in {"set_", "exclude_set"}:
+                kwargs.setdefault(key, value)
         if set_ is None:
             set_ = set(
                 self.on_conflict.get("set_") or self._get_default_index_elements()
