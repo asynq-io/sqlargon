@@ -206,7 +206,7 @@ class SQLAlchemyRepository(Generic[Model]):
                 kwargs.setdefault(key, value)
         if set_ is None:
             set_ = set(
-                self.on_conflict.get("set_") or self._get_default_index_elements()
+                self.on_conflict.get("set_") or self._get_default_set()
             ) - self.on_conflict.get("exclude_set", set())
         if set_:
             kwargs["set_"] = {k: getattr(query.excluded, k) for k in set_}
