@@ -1,6 +1,6 @@
 # SQLArgon
 
-![CI](https://github.com/asynq-io/sqlargon/workflows/CI/badge.svg)
+![Test](https://github.com/asynq-io/sqlargon/workflows/Test/badge.svg)
 ![Build](https://github.com/asynq-io/sqlargon/workflows/Publish/badge.svg)
 ![License](https://img.shields.io/github/license/asynq-io/sqlargon)
 ![Python](https://img.shields.io/pypi/pyversions/sqlargon)
@@ -97,7 +97,7 @@ class UserRepository(SQLAlchemyRepository[User]):
 
 
 
-    
+
 from fastapi import FastAPI
 
 app = FastAPI()
