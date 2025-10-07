@@ -11,6 +11,7 @@ from sqlakeyset.paging import (
     prepare_paging,
 )
 from sqlalchemy import (
+    Row,
     RowMapping,
     Select,
     func,
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class BasePage(Generic[Model]):
-    items: Sequence[Model] | Sequence[RowMapping]
+    items: Sequence[Model] | Sequence[RowMapping] | Sequence[Row]
 
 
 @dataclass
@@ -123,6 +124,7 @@ class NumberedPaginationStrategy(PaginationStrategy[int]):
         page_size: int = 100,
         as_model: bool = True,
         include_total: bool = True,
+        unique: bool = False,
         **kwargs,
     ) -> BasePage:
         offset = (page - 1) * page_size
@@ -142,9 +144,10 @@ class NumberedPaginationStrategy(PaginationStrategy[int]):
             total_pages = None
             page_result = await self.repository.execute_query(page_query)
 
-        items = (
-            page_result.scalars().all() if as_model else page_result.mappings().all()
-        )
+        partial_result = page_result.scalars() if as_model else page_result.mappings()
+        if unique:
+            partial_result = partial_result.unique()
+        items = partial_result.all()
 
         return NumberedPage(
             items=items,
