@@ -45,6 +45,7 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
         return self._session
 
     async def __aenter__(self) -> None:
+        self._repositories = {}
         self._session = self.db.session_maker()
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -59,6 +60,7 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
         finally:
             session = self.session
             self._session = None
+            self._repositories = {}
             await session.close()
 
     async def commit(self) -> None:
