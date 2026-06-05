@@ -1,9 +1,11 @@
 import uuid
+from typing import Any
 
-from sqlalchemy import CHAR, UUID, FunctionElement
+from sqlalchemy import CHAR, UUID, Dialect, FunctionElement
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.type_api import TypeDecorator
+from sqlalchemy.types import TypeEngine
 
 
 class GUID(TypeDecorator):
@@ -18,31 +20,28 @@ class GUID(TypeDecorator):
     impl = UUID
     cache_ok = True
 
-    def load_dialect_impl(self, dialect):
+    def load_dialect_impl(self, dialect: Dialect) -> TypeEngine[Any]:
         if dialect.name == "postgresql":
             return dialect.type_descriptor(postgresql.UUID(as_uuid=True))
-        else:
-            return dialect.type_descriptor(CHAR(36))
+        return dialect.type_descriptor(CHAR(36))
 
-    def process_bind_param(self, value, dialect):
+    def process_bind_param(self, value: Any, dialect: Dialect) -> Any:
         if value is None:
             return None
-        elif dialect.name == "postgresql":
+        if dialect.name == "postgresql":
             if isinstance(value, str):
                 value = uuid.UUID(value)
             return value
-        elif isinstance(value, uuid.UUID):
+        if isinstance(value, uuid.UUID):
             return str(value)
-        else:
-            return str(uuid.UUID(value))
+        return str(uuid.UUID(value))
 
-    def process_result_value(self, value, dialect):
+    def process_result_value(self, value: Any, dialect: Dialect) -> uuid.UUID | None:
         if value is None:
             return value
-        else:
-            if not isinstance(value, uuid.UUID):
-                value = uuid.UUID(value)
-            return value
+        if not isinstance(value, uuid.UUID):
+            value = uuid.UUID(value)
+        return value
 
 
 class GenerateUUID(FunctionElement):
@@ -51,16 +50,23 @@ class GenerateUUID(FunctionElement):
 
 @compiles(GenerateUUID, "postgresql")
 @compiles(GenerateUUID)
-def _generate_uuid_postgresql(element, compiler, **kwargs) -> str:
+def _generate_uuid_postgresql(
+    _element: GenerateUUID, _compiler: Any, **_kwargs: Any
+) -> str:
     """
-    Generates a random UUID in Postgres; requires the pgcrypto extension.
+    Generates a UUID in Postgres. Uses uuidv7() on PostgreSQL 18+,
+    otherwise falls back to GEN_RANDOM_UUID() which requires pgcrypto.
     """
-
-    return "(GEN_RANDOM_UUID())"
+    version_info = getattr(_compiler.dialect, "server_version_info", None)
+    if version_info and version_info >= (18,):
+        return "uuidv7()"
+    return "GEN_RANDOM_UUID()"
 
 
 @compiles(GenerateUUID, "sqlite")
-def _generate_uuid_sqlite(element, compiler, **kwargs) -> str:
+def _generate_uuid_sqlite(
+    _element: GenerateUUID, _compiler: Any, **_kwargs: Any
+) -> str:
     """
     Generates a random UUID in other databases (SQLite) by concatenating
     bytes in a way that approximates a UUID hex representation. This is

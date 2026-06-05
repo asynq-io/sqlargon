@@ -1,5 +1,5 @@
 import re
-from typing import TypeVar
+from typing import Any, ClassVar, TypeVar
 
 from sqlalchemy import MetaData
 from sqlalchemy.orm import declarative_base, declared_attr
@@ -16,16 +16,16 @@ class ORMModel:
     # an INSERT, for example
     #
     # https://docs.sqlalchemy.org/en/14/orm/extensions/asyncio.html#preventing-implicit-io-when-using-asyncsession
-    __mapper_args__ = {"eager_defaults": True}
+    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": False}
 
     @declared_attr
-    def __tablename__(cls):
+    def __tablename__(cls) -> str:  # noqa: N805
         """
         By default, turn the model's camel-case class name
         into a snake-case table name. Override by providing
         an explicit `__tablename__` class property.
         """
-        return camel_to_snake.sub("_", cls.__name__).lower()
+        return camel_to_snake.sub("_", cls.__name__).lower()  # type: ignore[attr-defined]
 
 
 naming_convention = {
@@ -35,6 +35,7 @@ naming_convention = {
     "fk": "fk_%(table_name)s__%(column_0_N_name)s__%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
+
 
 Base = declarative_base(
     cls=ORMModel, metadata=MetaData(naming_convention=naming_convention)

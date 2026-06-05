@@ -1,18 +1,18 @@
 from ._version import __version__
-from .db import Database
-from .orm import Base, ORMModel
+from .database import Database
+from .orm import Base, Model, ORMModel
+from .registry import db_registry
 from .repository import SQLAlchemyRepository
-from .types import GUID, JSON, GenerateUUID
-from .uow import SQLAlchemyUnitOfWork
+from .uow import AbstractUnitOfWork, SQLAlchemyUnitOfWork
 
 __all__ = [
-    "__version__",
+    "AbstractUnitOfWork",
     "Base",
     "Database",
-    "GenerateUUID",
+    "Model",
     "ORMModel",
     "SQLAlchemyRepository",
     "SQLAlchemyUnitOfWork",
-    "JSON",
-    "GUID",
+    "__version__",
+    "db_registry",
 ]

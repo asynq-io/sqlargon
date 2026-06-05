@@ -1,121 +1,111 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Generator, Mapping, Sequence
 from contextlib import asynccontextmanager
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Generic,
-    TypedDict,
-    TypeVar,
-)
+from typing import TYPE_CHECKING, Any, Generic, Literal, overload
 
-import sqlalchemy as sa
 from sqlalchemy import (
     Executable,
     MappingResult,
     Result,
+    Row,
     ScalarResult,
-    Select,
     bindparam,
 )
-from sqlalchemy.ext.asyncio.session import AsyncSession
-from sqlalchemy.orm import joinedload, load_only
-from typing_extensions import Self
+from sqlalchemy.orm import QueryableAttribute, selectinload
+from typing_extensions import Self, Unpack
+
+from sqlargon.functools import atomic
 
 from .orm import Model, ORMModel
-from .pagination import BasePage, PaginationStrategy, TokenPaginationStrategy
+from .registry import db_registry
+from .typing import (
+    MultipleValues,
+    OnConflict,
+    OnConflictOptions,
+    Params,
+    SingleValue,
+    Values,
+    WithForUpdate,
+)
 
 if TYPE_CHECKING:
-    from sqlalchemy.sql import ClauseElement
+    from collections.abc import (
+        AsyncGenerator,
+        AsyncIterator,
+        Callable,
+        Generator,
+        Sequence,
+    )
+
+    from sqlalchemy.ext.asyncio.session import AsyncSession
     from sqlalchemy.sql._typing import (
         _ColumnExpressionArgument,
-        _ColumnsClauseArgument,
         _JoinTargetArgument,
         _OnClauseArgument,
     )
+    from sqlalchemy.sql.selectable import TypedReturnsRows
 
-    from .db import Database
-
-D = TypeVar("D", bound=Any)
-
-
-class OnConflict(TypedDict, total=False):
-    index_elements: set[str]
-    set_: set[str]
-    constraint: str
-    index_where: Any
-    where: Any
-    exclude_set: set[str]
+    from .database import Database
+    from .query_builder import QueryBuilder
 
 
 class SQLAlchemyRepository(Generic[Model]):
     model: type[Model]
     default_order_by: str | _ColumnExpressionArgument | None = None
-    default_page_size: int = 100
-    paginator: PaginationStrategy = TokenPaginationStrategy()
+    __slots__ = ("_query", "_use_db")
 
-    __slots__ = ("db", "_query", "_session")
+    def __init__(self) -> None:
+        self._query: Any = None
+        self._use_db: str = "default"
 
-    def __init_subclass__(cls, abstract: bool = False, **kwargs):
-        if not abstract:
-            cls.model = cls.__orig_bases__[0].__args__[0]  # type: ignore[attr-defined]
+    def __init_subclass__(
+        cls,
+        *,
+        abstract: bool = False,
+        model: type[Model] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        if model is not None:
+            cls.model = model
+        elif not abstract:
+            if not hasattr(cls, "model"):
+                cls.model = cls.__orig_bases__[0].__args__[0]  # type: ignore[attr-defined]
             if not issubclass(cls.model, ORMModel):
-                raise TypeError(f"Could not resolve model for {cls.__name__}")
+                msg = f"Could not resolve model for {cls.__name__}"
+                raise TypeError(msg)
         super().__init_subclass__(**kwargs)
 
-    def __init__(
-        self,
-        db: Database,
-        session: AsyncSession | None = None,
-        query: ClauseElement | Callable | None = None,
-    ):
-        self.db = db
-        self._session = session
-        self._query = query
-
-    @asynccontextmanager
-    async def session(self) -> AsyncIterator[AsyncSession]:
-        if self._session:
-            yield self._session
-        else:
-            async with self.db.session() as session:
-                yield session
+    @property
+    def db_name(self) -> str:
+        return self._use_db
 
     @property
-    def raw_query(self) -> str:
-        return str(self.query)
+    def db(self) -> Database:
+        return db_registry[self.db_name]
 
-    def copy(self, query: ClauseElement | Executable | Callable) -> Self:
-        return self.__class__(self.db, self._session, query)
+    @property
+    def qb(self) -> QueryBuilder:
+        return self.db.query_builder
 
-    def __call__(self, *args, **kwargs) -> Self:
-        self._query = self._query(*args, **kwargs)  # type: ignore[misc]
+    @property
+    def query(self) -> Any:
+        if self._query is None:
+            query = self.qb.select(self.model)
+            if self.default_order_by is not None:
+                query = query.order_by(self.default_order_by)
+            self._query = query
+        return self._query
+
+    def __getattr__(self, attribute: str) -> Self:
+        self._query = getattr(self.query, attribute)
         return self
 
-    def __getattr__(self, item: str) -> Self:
-        self._query = getattr(self._query, item)
+    def __call__(self, *args: Any, **kwargs: Any) -> Self:
+        self._query = self.query(*args, **kwargs)
         return self
 
     def __await__(self) -> Generator[Any, None, Result]:
         return self.execute().__await__()
-
-    @property
-    def _insert(self):
-        return self.db.insert
-
-    @property
-    def _update(self):
-        return self.db.update
-
-    @property
-    def _delete(self):
-        return self.db.delete
-
-    @property
-    def _select(self):
-        return self.db.select
 
     @classmethod
     def _get_default_index_elements(cls) -> set[str]:
@@ -133,97 +123,74 @@ class SQLAlchemyRepository(Generic[Model]):
         }
 
     @property
-    def on_conflict(self) -> OnConflict:
+    def on_conflict(self) -> OnConflictOptions:
         return {
             "index_elements": self._get_default_index_elements(),
             "set_": self._get_default_set(),
         }
 
-    def _get_default_select_query(self, *args):
-        if len(args) == 0:
-            args = (self.model,)
-        query = self._select(*args)
-        if type(self).default_order_by is not None:
-            query = query.order_by(self.default_order_by)
-        return query
+    def use_query(self, query: Any) -> Self:
+        self._query = query
+        return self
 
-    @property
-    def query(self) -> Select | ClauseElement | Executable:
-        if self._query is None:
-            self._query = self._get_default_select_query()
-        return self._query
+    def use_db(self, name: str) -> Self:
+        self._use_db = name
+        return self
 
-    def filter(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> Self:
-        query = self.query
-        if args:
-            query = query.filter(*args)  # type: ignore[union-attr]
-        if kwargs:
-            query = query.filter_by(**kwargs)  # type: ignore[union-attr]
-        return self.copy(query)
-
-    def where(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> Self:
-        return self.filter(*args, **kwargs)
-
-    def select(self, *args: _ColumnsClauseArgument) -> Self:
-        query = self._get_default_select_query(*args)
-        return self.copy(query)
+    def copy(self, query: Any) -> Self:
+        return self.__class__().use_db(self.db_name).use_query(query)
 
     def insert(
         self,
-        values: Any,
-        return_results: bool = True,
+        values: Values,
+        *,
+        return_results: bool = False,
         ignore_conflicts: bool = False,
-        index_where: _ColumnExpressionArgument[bool] | None = None,
+        **options: Unpack[OnConflictOptions],
     ) -> Self:
-        query = self._insert(self.model).values(values)
-        if self.db.supports_returning and return_results:
-            query = query.returning(self.model)
-
-        if self.db.supports_on_conflict and ignore_conflicts:
-            query = query.on_conflict_do_nothing(
-                index_elements=self.on_conflict.get("index_elements")
-                or self._get_default_index_elements(),
-                index_where=index_where,
-            )
-
+        on_conflict = None
+        if ignore_conflicts:
+            on_conflict = OnConflict(do="ignore", options=self.on_conflict | options)
+        query = self.qb.insert(
+            self.model, values, return_results=return_results, on_conflict=on_conflict
+        )
         return self.copy(query)
 
     def upsert(
         self,
-        values: Any,
+        values: Values,
+        *,
         return_results: bool = False,
-        set_: set[str] | None = None,
-        **kwargs: Any,
+        **options: Unpack[OnConflictOptions],
     ) -> Self:
-        if not self.db.supports_on_conflict:
-            raise TypeError("Upsert is not supported")
-
-        query = self._insert(self.model).values(values)
-        if self.db.supports_returning and return_results:
-            query = query.returning(self.model)
-        for key, value in self.on_conflict.items():
-            if key not in {"set_", "exclude_set"}:
-                kwargs.setdefault(key, value)
-        if set_ is None:
-            set_ = set(
-                self.on_conflict.get("set_") or self._get_default_set()
-            ) - self.on_conflict.get("exclude_set", set())
-        if set_:
-            kwargs["set_"] = {k: getattr(query.excluded, k) for k in set_}
-        query = query.on_conflict_do_update(**kwargs)
+        query = self.qb.insert(
+            self.model,
+            values,
+            return_results=return_results,
+            on_conflict=OnConflict(do="update", options=self.on_conflict | options),
+        )
         return self.copy(query)
 
-    def update(self, values: Any, return_results: bool = False) -> Self:
-        query = self._update(self.model).values(values)
-        if self.db.supports_returning and return_results:
-            query = query.returning(self.model)
+    def select(
+        self,
+        *args: Any,
+        with_for_update: bool | WithForUpdate | None = None,
+        options: tuple[Any, ...] | None = None,
+    ) -> Self:
+        args = args or (self.model,)
+        query = self.qb.select(*args, with_for_update=with_for_update, options=options)
         return self.copy(query)
 
-    def delete(self, return_results: bool = False) -> Self:
-        query = self._delete(self.model)
-        if self.db.supports_returning and return_results:
-            query = query.returning(self.model)
+    def update(self, values: Values, *, return_results: bool = False) -> Self:
+        query = self.qb.update(self.model, values, return_results=return_results)
+        return self.copy(query)
 
+    def delete(self, *, return_results: bool = False) -> Self:
+        query = self.qb.delete(self.model, return_results=return_results)
+        return self.copy(query)
+
+    def filter(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> Self:
+        query = self.qb.filter(self.query, *args, **kwargs)
         return self.copy(query)
 
     def join(
@@ -233,45 +200,53 @@ class SQLAlchemyRepository(Generic[Model]):
         *,
         isouter: bool = False,
         full: bool = False,
-    ):
+    ) -> Self:
         query = self.query.join(target, onclause, isouter=isouter, full=full)  # type: ignore[attr-defined]
         return self.copy(query)
 
-    def joinedload(self, *relationships, **loaded_only) -> Self:
-        load_args_options = joinedload(
-            *(getattr(self.model, relationship) for relationship in relationships)
-        )
-        load_kwargs_options = [
-            joinedload(getattr(self.model, k)).options(load_only(*v))
-            for k, v in loaded_only.items()
-        ]
-        query = self.query.options(*load_args_options, *load_kwargs_options)
+    def load(self, *keys: QueryableAttribute) -> Self:
+        query = self.query.options(selectinload(*keys))
         return self.copy(query)
 
-    async def count(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> int:
-        query = self._select(sa.func.count()).select_from(self.model)
-        if args:
-            query = query.filter(*args)
-        if kwargs:
-            query = query.filter_by(**kwargs)
-        return (await self.execute_query(query)).scalar()
+    @asynccontextmanager
+    async def session(self) -> AsyncGenerator[AsyncSession]:
+        async with self.db.session_context() as session:
+            yield session
 
-    async def execute_many(self, queries: Sequence[Executable], *args, **kwargs):
+    async def execute_query(
+        self,
+        query: Executable | TypedReturnsRows,
+        params: Params | None = None,
+        **kwargs: Any,
+    ) -> Result:
+        async with self.session() as session:
+            return await session.execute(query, params, **kwargs)
+
+    async def execute(self, params: Params | None = None, **kwargs: Any) -> Result:
+        return await self.execute_query(self.query, params, **kwargs)
+
+    async def execute_many(
+        self, *queries: Executable | TypedReturnsRows, **kwargs: Any
+    ) -> None:
         async with self.session() as session:
             for query in queries:
-                yield await session.execute(query, *args, **kwargs)
+                await session.execute(query, **kwargs)
 
-    async def execute_query(self, query: Executable, *args, **kwargs) -> Result:
+    async def stream_query(
+        self,
+        query: Executable | TypedReturnsRows,
+        params: Params | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[Row[Any]]:
         async with self.session() as session:
-            return await session.execute(query, *args, **kwargs)
-
-    async def execute(self) -> Result:
-        return await self.execute_query(self.query)
-
-    async def stream(self, *args, **kwargs):
-        async with self.session() as session:
-            async for row in session.stream(self.query, *args, **kwargs):
+            rows = await session.stream(query, params, **kwargs)
+            async for row in rows:
                 yield row
+
+    def stream(
+        self, params: Params | None = None, **kwargs: Any
+    ) -> AsyncIterator[Row[Any]]:
+        return self.stream_query(self.query, params, **kwargs)
 
     async def mappings(self) -> MappingResult:
         return (await self.execute()).mappings()
@@ -279,16 +254,21 @@ class SQLAlchemyRepository(Generic[Model]):
     async def scalar(self) -> Any:
         return (await self.execute()).scalar()
 
-    async def scalars(self) -> ScalarResult:
+    async def scalars(self) -> ScalarResult[Model]:
         return (await self.execute()).scalars()
 
-    async def unique(self) -> Any:
-        return (await self.scalars()).unique()
+    async def unique(
+        self, strategy: Callable[[Any], Any] | None = None
+    ) -> ScalarResult[Model]:
+        return (await self.scalars()).unique(strategy)
 
-    async def all(self, unique: bool = False) -> Sequence[Model]:
-        if unique:
-            return (await self.scalars()).unique().all()
-        return (await self.scalars()).all()
+    async def all(
+        self, *, unique: bool | Callable[[Any], Any] = False
+    ) -> Sequence[Model]:
+        if not unique:
+            return (await self.scalars()).all()
+        strategy = unique if callable(unique) else None
+        return (await self.unique(strategy)).all()
 
     async def one(self) -> Model:
         return (await self.scalars()).one()
@@ -296,91 +276,146 @@ class SQLAlchemyRepository(Generic[Model]):
     async def one_or_none(self) -> Model | None:
         return (await self.scalars()).one_or_none()
 
-    async def one_or(self, default: D | None = None) -> Model | D | None:
-        return (await self.one_or_none()) or default
-
-    async def first(self) -> Model:
+    async def first(self) -> Model | None:
         return (await self.scalars()).first()
 
-    async def get(self, *args, **kwargs) -> Model | None:
+    async def get(
+        self, *args: _ColumnExpressionArgument[bool], **kwargs: Any
+    ) -> Model | None:
         return await self.filter(*args, **kwargs).one_or_none()
 
-    async def create_or_update(self, **kwargs) -> Model:
+    async def create_or_update(self, **kwargs: Any) -> Model:
         return await self.upsert(kwargs, return_results=True).one()
 
+    @atomic
     async def get_or_create(
-        self, defaults: dict[str, Any] | None = None, **kwargs
+        self, defaults: SingleValue | None = None, **kwargs: Any
     ) -> Model:
-        defaults = defaults or {}
-        defaults.update(kwargs)
-        obj = await self.insert(defaults, ignore_conflicts=True).one_or_none()
+        values = {**(defaults or {}), **kwargs}
+        obj = await self.insert(
+            values, return_results=True, ignore_conflicts=True
+        ).one_or_none()
         if obj is None:
             obj = await self.select().filter(**kwargs).one()
         return obj
 
-    async def create(self, **kwargs) -> Model | None:
+    async def create(self, **kwargs: Any) -> Model | None:
         return await self.insert(
-            kwargs, ignore_conflicts=True, return_results=True
+            kwargs, return_results=True, ignore_conflicts=True
         ).one_or_none()
 
-    async def remove(self, *args, **kwargs) -> None:
+    async def remove(
+        self, *args: _ColumnExpressionArgument[bool], **kwargs: Any
+    ) -> None:
         await self.delete().filter(*args, **kwargs).execute()
 
-    async def delete_one(self, *args, **kwargs) -> Model | None:
+    async def delete_one(
+        self, *args: _ColumnExpressionArgument[bool], **kwargs: Any
+    ) -> Model | None:
         return (
             await self.delete(return_results=True).filter(*args, **kwargs).one_or_none()
         )
 
-    async def delete_many(self, *args, **kwargs) -> Sequence[Model]:
+    async def update_one(
+        self, values: SingleValue, *args: _ColumnExpressionArgument[bool], **kwargs: Any
+    ) -> Model | None:
+        return (
+            await self.update(values, return_results=True)
+            .filter(*args, **kwargs)
+            .one_or_none()
+        )
+
+    async def delete_many(
+        self, *args: _ColumnExpressionArgument[bool], **kwargs: Any
+    ) -> Sequence[Model]:
         return await self.delete(return_results=True).filter(*args, **kwargs).all()
 
-    async def list(self, *args, **kwargs) -> Sequence[Model]:
+    async def list(
+        self, *args: _ColumnExpressionArgument[bool], **kwargs: Any
+    ) -> Sequence[Model]:
         return await self.select().filter(*args, **kwargs).all()
+
+    @overload
+    async def bulk_create_or_update(
+        self,
+        values: MultipleValues,
+        *,
+        return_results: Literal[False],
+        **options: Unpack[OnConflictOptions],
+    ) -> Result: ...
+
+    @overload
+    async def bulk_create_or_update(
+        self,
+        values: MultipleValues,
+        *,
+        return_results: Literal[True],
+        **options: Unpack[OnConflictOptions],
+    ) -> Sequence[Model]: ...
 
     async def bulk_create_or_update(
         self,
-        values: Sequence[Mapping],
+        values: MultipleValues,
+        *,
         return_results: bool = False,
-        set_: set[str] | None = None,
-        **kwargs: Any,
+        **options: Unpack[OnConflictOptions],
     ) -> Sequence[Model] | Result:
-        q = self.upsert(values, return_results=return_results, set_=set_, **kwargs)
+        q = self.upsert(values, return_results=return_results, **options)
         if return_results:
             return await q.all()
 
         return await q.execute()
 
+    @overload
     async def bulk_create(
         self,
-        values: Sequence[Mapping],
+        values: MultipleValues,
+        *,
+        ignore_conflicts: bool = True,
+        return_results: Literal[False],
+    ) -> None: ...
+
+    @overload
+    async def bulk_create(
+        self,
+        values: MultipleValues,
+        *,
+        ignore_conflicts: bool = True,
+        return_results: Literal[True],
+    ) -> Sequence[Model]: ...
+
+    async def bulk_create(
+        self,
+        values: MultipleValues,
+        *,
         ignore_conflicts: bool = True,
         return_results: bool = False,
+        **options: Unpack[OnConflictOptions],
     ) -> Sequence[Model] | None:
         q = self.insert(
-            values, ignore_conflicts=ignore_conflicts, return_results=return_results
+            values,
+            ignore_conflicts=ignore_conflicts,
+            return_results=return_results,
+            **options,
         )
         if return_results:
             return await q.all()
-        else:
-            await q.execute()
+        await q.execute()
         return None
 
     async def bulk_update(
-        self, values: Sequence[Mapping], on_: set[str], *args
+        self, values: MultipleValues, on_: set[str], *args: Any
     ) -> None:
         where = [getattr(self.model, field) == bindparam(f"u_{field}") for field in on_]
         values = [
             {key if key not in on_ else f"u_{key}": value for key, value in row.items()}
             for row in values
         ]
-        query = self._update(self.model).where(*args, *where)
+        query = self.qb.update(self.model).where(*args, *where)
         async with self.session() as session:
             connection = await session.connection()
             await connection.execute(query, values)
 
-    async def get_page(
-        self, page: Any = None, page_size: int = 100, as_model: bool = True, **kwargs
-    ) -> BasePage[Model]:
-        return await self.paginator.paginate(
-            page=page, page_size=page_size, as_model=as_model, **kwargs
-        )
+    async def count(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> int:
+        query = self.qb.count(self.model, *args, **kwargs)
+        return (await self.execute_query(query)).scalar()  # type: ignore[return-value]

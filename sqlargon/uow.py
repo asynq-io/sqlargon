@@ -1,22 +1,35 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Any, get_type_hints, no_type_check
+from abc import abstractmethod
+from contextlib import AbstractAsyncContextManager, AsyncExitStack
+from typing import TYPE_CHECKING, Any, get_type_hints
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from .registry import db_registry
+from .repository import SQLAlchemyRepository
 
-from sqlargon import Database, SQLAlchemyRepository
+if TYPE_CHECKING:
+    from types import TracebackType
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from .database import Database
 
 
-class AbstractUnitOfWork(ABC):
-    @abstractmethod
-    async def __aenter__(self) -> None:
-        raise NotImplementedError
+class _RepositoryDescriptor:
+    def __init__(self, repository_cls: type[SQLAlchemyRepository]) -> None:
+        self.repository_cls = repository_cls
 
-    @abstractmethod
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        raise NotImplementedError
+    def __get__(
+        self, instance: SQLAlchemyUnitOfWork | None, owner: type[SQLAlchemyUnitOfWork]
+    ) -> type[SQLAlchemyRepository] | SQLAlchemyRepository:
+        if instance is None:
+            return self.repository_cls
+        repository = self.repository_cls()
+        repository.use_db(instance.db_name)
+        return repository
 
+
+class AbstractUnitOfWork(AbstractAsyncContextManager):
     @abstractmethod
     async def commit(self) -> None:
         raise NotImplementedError
@@ -27,60 +40,62 @@ class AbstractUnitOfWork(ABC):
 
 
 class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
-    def __init__(
-        self,
-        db: Database,
-        *,
-        raise_on_exc: bool = True,
-    ) -> None:
-        self.db = db
-        self.raise_on_exc = raise_on_exc
-        self._repositories: dict[str, SQLAlchemyRepository] = {}
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        hints = get_type_hints(cls)
+        for name, hint in hints.items():
+            if (
+                isinstance(hint, type)
+                and issubclass(hint, SQLAlchemyRepository)
+                and not isinstance(cls.__dict__.get(name), _RepositoryDescriptor)
+            ):
+                setattr(cls, name, _RepositoryDescriptor(hint))
+
+    def __init__(self) -> None:
+        self._stack = AsyncExitStack()
         self._session: AsyncSession | None = None
+        self._use_db: str | None = None
+
+    @property
+    def db_name(self) -> str:
+        return self._use_db or "default"
+
+    def use_db(self, name: str) -> None:
+        if self._use_db is not None:
+            msg = "DB name already set"
+            raise ValueError(msg)
+        self._use_db = name
+
+    @property
+    def db(self) -> Database:
+        return db_registry[self.db_name]
 
     @property
     def session(self) -> AsyncSession:
         if self._session is None:
-            raise ValueError("Session not initialized")
+            msg = "Session not initialized"
+            raise ValueError(msg)
         return self._session
 
     async def __aenter__(self) -> None:
-        self._repositories = {}
-        self._session = self.db.session_maker()
+        if self._session is not None:
+            msg = "Cannot open the same unit of work more than once"
+            raise ValueError(msg)
+        await self._stack.__aenter__()
+        session = await self._stack.enter_async_context(self.db.session_context())
+        self._session = session
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        await self.close(exc_val)
-
-    async def close(self, exc: Exception | None) -> None:
-        try:
-            if exc is None:
-                await self.commit()
-            else:
-                await self.rollback()
-        finally:
-            session = self.session
-            self._session = None
-            self._repositories = {}
-            await session.close()
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        self._session = None
+        await self._stack.__aexit__(exc_type, exc_val, exc_tb)
 
     async def commit(self) -> None:
-        try:
-            await self.session.commit()
-        except:  # noqa
-            await self.session.rollback()
-            if self.raise_on_exc:
-                raise
+        await self.session.commit()
 
     async def rollback(self) -> None:
         await self.session.rollback()
-
-    @no_type_check
-    def __getattr__(self, item: str) -> Any:
-        if item.startswith("__"):
-            return self.__getattribute__(item)
-        if item not in self._repositories:
-            repository_cls = get_type_hints(type(self)).get(item)
-            if repository_cls is None:
-                raise TypeError("Could not resolve type annotation for %s", item)
-            self._repositories[item] = repository_cls(self.db, self.session)
-        return self._repositories[item]

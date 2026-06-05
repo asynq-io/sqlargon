@@ -1,9 +1,12 @@
+from typing import Any
+
 import sqlalchemy as sa
-from sqlalchemy import BOOLEAN, FunctionElement, TypeDecorator
+from sqlalchemy import BOOLEAN, Dialect, FunctionElement, TypeDecorator
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.types import TypeEngine
 
-from ..utils import json_dumps
+from sqlargon.utils import json_dumps
 
 
 class json_contains(FunctionElement):
@@ -19,14 +22,16 @@ class json_contains(FunctionElement):
     name = "json_contains"
     inherit_cache = False
 
-    def __init__(self, left, right):
+    def __init__(self, left: Any, right: Any) -> None:
         self.left = left
         self.right = right
         super().__init__()
 
 
 @compiles(json_contains, "postgresql")
-def _json_contains_postgresql(element, compiler, **kwargs):
+def _json_contains_postgresql(
+    element: json_contains, compiler: Any, **kwargs: Any
+) -> str:
     return compiler.process(
         sa.type_coerce(element.left, postgresql.JSONB).contains(
             sa.type_coerce(element.right, postgresql.JSONB)
@@ -35,7 +40,9 @@ def _json_contains_postgresql(element, compiler, **kwargs):
     )
 
 
-def _json_contains_sqlite_fn(left, right, compiler, **kwargs):
+def _json_contains_sqlite_fn(
+    left: Any, right: Any, compiler: Any, **_kwargs: Any
+) -> str:
     if isinstance(left, (list, dict, tuple, str)):
         left = json_dumps(left)
 
@@ -65,8 +72,19 @@ def _json_contains_sqlite_fn(left, right, compiler, **kwargs):
 
 
 @compiles(json_contains, "sqlite")
-def _json_contains_sqlite(element, compiler, **kwargs):
+def _json_contains_sqlite(element: json_contains, compiler: Any, **kwargs: Any) -> str:
     return _json_contains_sqlite_fn(element.left, element.right, compiler, **kwargs)
+
+
+@compiles(json_contains, "mysql")
+def _json_contains_mysql(element: json_contains, compiler: Any, **kwargs: Any) -> str:
+    return compiler.process(
+        sa.func.json_contains(
+            sa.type_coerce(element.left, sa.JSON),
+            sa.type_coerce(element.right, sa.JSON),
+        ),
+        **kwargs,
+    )
 
 
 class json_has_any_key(FunctionElement):
@@ -77,21 +95,24 @@ class json_has_any_key(FunctionElement):
     https://www.postgresql.org/docs/current/functions-json.html
     """
 
-    type = BOOLEAN  # type: ignore
+    type: Any = BOOLEAN
     name = "json_has_any_key"
     inherit_cache = False
 
-    def __init__(self, json_expr, values: list):
+    def __init__(self, json_expr: Any, values: list) -> None:
         self.json_expr = json_expr
         if not all(isinstance(v, str) for v in values):
-            raise ValueError("json_has_any_key values must be strings")
+            msg = "json_has_any_key values must be strings"
+            raise ValueError(msg)
         self.values = values
         super().__init__()
 
 
 @compiles(json_has_any_key, "postgresql")
 @compiles(json_has_any_key)
-def _json_has_any_key_postgresql(element, compiler, **kwargs):
+def _json_has_any_key_postgresql(
+    element: json_has_any_key, compiler: Any, **kwargs: Any
+) -> str:
     values_array = postgresql.array(element.values)
     # if the array is empty, postgres requires a type annotation
     if not element.values:
@@ -104,7 +125,9 @@ def _json_has_any_key_postgresql(element, compiler, **kwargs):
 
 
 @compiles(json_has_any_key, "sqlite")
-def _json_has_any_key_sqlite(element, compiler, **kwargs):
+def _json_has_any_key_sqlite(
+    element: json_has_any_key, compiler: Any, **kwargs: Any
+) -> str:
     json_each = sa.func.json_each(element.json_expr).alias("json_each")
     return compiler.process(
         sa.select(1)
@@ -119,6 +142,19 @@ def _json_has_any_key_sqlite(element, compiler, **kwargs):
     )
 
 
+@compiles(json_has_any_key, "mysql")
+def _json_has_any_key_mysql(
+    element: json_has_any_key, compiler: Any, **kwargs: Any
+) -> str:
+    if not element.values:
+        return compiler.process(sa.false(), **kwargs)
+    paths = [sa.literal(f"$.{key}") for key in element.values]
+    return compiler.process(
+        sa.func.json_contains_path(element.json_expr, sa.literal("one"), *paths),
+        **kwargs,
+    )
+
+
 class json_has_all_keys(FunctionElement):
     """Platform independent json_has_all_keys operator.
 
@@ -126,23 +162,26 @@ class json_has_all_keys(FunctionElement):
     https://www.postgresql.org/docs/current/functions-json.html
     """
 
-    type = BOOLEAN  # type: ignore
+    type: Any = BOOLEAN
     name = "json_has_all_keys"
     inherit_cache = False
 
-    def __init__(self, json_expr, values: list):
+    def __init__(self, json_expr: Any, values: list) -> None:
         self.json_expr = json_expr
         if isinstance(values, list) and not all(isinstance(v, str) for v in values):
-            raise ValueError(
+            msg = (
                 "json_has_all_key values must be strings if provided as a literal list"
             )
+            raise ValueError(msg)
         self.values = values
         super().__init__()
 
 
 @compiles(json_has_all_keys, "postgresql")
 @compiles(json_has_all_keys)
-def _json_has_all_keys_postgresql(element, compiler, **kwargs):
+def _json_has_all_keys_postgresql(
+    element: json_has_all_keys, compiler: Any, **kwargs: Any
+) -> str:
     values_array = postgresql.array(element.values)
 
     # if the array is empty, postgres requires a type annotation
@@ -156,12 +195,27 @@ def _json_has_all_keys_postgresql(element, compiler, **kwargs):
 
 
 @compiles(json_has_all_keys, "sqlite")
-def _json_has_all_keys_sqlite(element, compiler, **kwargs):
+def _json_has_all_keys_sqlite(
+    element: json_has_all_keys, compiler: Any, **kwargs: Any
+) -> str:
     # "has all keys" is equivalent to "json contains"
     return _json_contains_sqlite_fn(
         left=element.json_expr,
         right=element.values,
         compiler=compiler,
+        **kwargs,
+    )
+
+
+@compiles(json_has_all_keys, "mysql")
+def _json_has_all_keys_mysql(
+    element: json_has_all_keys, compiler: Any, **kwargs: Any
+) -> str:
+    if not element.values:
+        return compiler.process(sa.true(), **kwargs)
+    paths = [sa.literal(f"$.{key}") for key in element.values]
+    return compiler.process(
+        sa.func.json_contains_path(element.json_expr, sa.literal("all"), *paths),
         **kwargs,
     )
 
@@ -178,22 +232,21 @@ class JSON(TypeDecorator):
     impl = postgresql.JSONB
     cache_ok = True
 
-    def load_dialect_impl(self, dialect):
+    def load_dialect_impl(self, dialect: Dialect) -> TypeEngine[Any]:
         if dialect.name == "postgresql":
             return dialect.type_descriptor(postgresql.JSONB(none_as_null=True))
-        elif dialect.name == "sqlite":
+        if dialect.name == "sqlite":
             return dialect.type_descriptor(sqlite.JSON(none_as_null=True))
-        else:
-            return dialect.type_descriptor(sa.JSON(none_as_null=True))
+        return dialect.type_descriptor(sa.JSON(none_as_null=True))
 
     class ComparatorFactory(sa.JSON.Comparator):
-        def contains(self, other, **kw):
+        def contains(self, other: Any, **_kw: Any) -> json_contains:
             return json_contains(self, other)
 
-        def has_any_key(self, other):
+        def has_any_key(self, other: Any) -> json_has_any_key:
             return json_has_any_key(self, other)
 
-        def has_all_keys(self, other):
+        def has_all_keys(self, other: Any) -> json_has_all_keys:
             return json_has_all_keys(self, other)
 
     comparator_factory = ComparatorFactory

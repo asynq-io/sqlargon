@@ -1,6 +1,6 @@
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import Pool
 
@@ -9,24 +9,21 @@ from .imports import ImportedType
 
 class DatabaseSettings(BaseSettings):
     url: str = "postgresql+asyncpg://localhost:5432"
+    name: str = "default"
     echo: bool = False
-    isolation_level: Optional[str] = None
-    json_serializer: ImportedType[Callable[[Any], str]] = Field(
-        "sqlargon.utils:json_dumps"
-    )
-    json_deserializer: ImportedType[Callable[[str], Any]] = Field(
-        "sqlargon.utils:json_loads"
-    )
-    connect_args: Optional[dict[str, Any]] = None
-    enable_tracker: bool = True
-    poolclass: Optional[ImportedType[type[Pool]]] = None
-    pool_size: Optional[int] = None
-    max_overflow: Optional[int] = None
-    echo_pool: Optional[bool] = None
-    pool_recycle: Optional[int] = None
-    pool_pre_ping: Optional[bool] = None
-    pool_timeout: Optional[int] = None
-    pool_use_lifo: Optional[bool] = None
+    isolation_level: str | None = None
+    json_serializer: ImportedType[Callable[[Any], str]] | None = None
+    json_deserializer: ImportedType[Callable[[str], Any]] | None = None
+    connect_args: dict[str, Any] | None = None
+    enable_tracker: bool = False
+    poolclass: ImportedType[type[Pool]] | None = None
+    pool_size: int | None = None
+    max_overflow: int | None = None
+    echo_pool: bool | None = None
+    pool_recycle: int | None = None
+    pool_pre_ping: bool | None = None
+    pool_timeout: int | None = None
+    pool_use_lifo: bool | None = None
 
     model_config = SettingsConfigDict(
         extra="allow",

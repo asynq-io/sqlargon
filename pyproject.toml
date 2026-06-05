@@ -1,63 +1,77 @@
-[tool.poetry]
+[project]
 name = "sqlargon"
 version = "0.6.12"
 description = "SQLAlchemy utils for Postgres and Sqlite"
 readme = "README.md"
-authors = ["Radzim Kowalow <rarha_eu@protonmail.com>"]
+requires-python = ">=3.10,<4.0"
+authors = [{ name = "RaRhAeu", email = "rarha_eu@protonmail.com" }]
+dependencies = [
+    "pydantic>=2.0,<3",
+    "pydantic-settings>=2.1.0,<3",
+    "sqlalchemy>2.0,<3",
+    "alembic>=1.13.1,<2",
+    "uuid-utils>=0.16.0",
+    "orjson>=3.11.9",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.8.1,<4.0"
-alembic = "^1.13.1"
-asyncpg = "<1.0"
-aiosqlite = "^0.19.0"
-sqlalchemy = ">2.0,<3"
-pydantic = ">=2.0,<3"
-pydantic-settings = "^2.1.0"
-sqlakeyset = "^2.0.1716332987"
-orjson = { version = "*", optional = true }
-opentelemetry-instrumentation-sqlalchemy = { version = "*", optional = true }
-
-[tool.poetry.extras]
-all = ["orjson", "opentelemetry-instrumentation-sqlalchemy"]
-orjson = ["orjson"]
+[project.optional-dependencies]
+postgres = ["asyncpg<1.0"]
+sqlite = ["aiosqlite>=0.19.0,<1"]
+mysql = ["asyncmy>=0.2.11"]
+pagination = ["sqlakeyset>=2.0.1716332987,<3"]
 opentelemetry = ["opentelemetry-instrumentation-sqlalchemy"]
 
-[tool.poetry.group.dev.dependencies]
-ruff = "==0.1.13"
-mypy = "^1.2.0"
-deptry = "^0.12.0"
-bandit = "^1.7.4"
-python-semantic-release = "^7.33.2"
-greenlet = "^3.0.3"
 
-[tool.poetry.group.test.dependencies]
-pytest = "^8.3.3"
-pytest-cov = "^4.0.0"
-pytest-sugar = "^0.9.7"
-pytest-repeat = "^0.9.3"
-pytest-asyncio = "^0.24.0"
+[dependency-groups]
+dev = [
+    { include-group = "lint" },
+    { include-group = "test" },
+    { include-group = "docs" },
+    "greenlet",
+]
 
-[tool.poetry.group.docs.dependencies]
-mkdocs = "^1.5.3"
-watchdog = ">=2.0,<4.0"
-mkdocs-material = "^9.5.9"
-mkdocs-autorefs = "^0.5.0"
-mkdocs-gen-files = "^0.5.0"
-mkdocstrings = { extras = ["python"], version = "^0.24.0" }
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-sugar",
+    "pytest-repeat",
+    "pytest-asyncio",
+]
+
+lint = [
+    "mypy",
+    "ruff",
+    "bandit",
+    "deptry",
+]
+
+docs = [
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocs-autorefs",
+    "mkdocs-gen-files",
+    "mkdocstrings[python]",
+    "watchdog>=2.0,<4.0",
+]
+
+[tool.uv.build-backend]
+module-root = ""
+
+[build-system]
+requires = ["uv_build>=0.9.16,<0.10.0"]
+build-backend = "uv_build"
 
 
 [tool.pytest.ini_options]
 addopts = "--cov=./sqlargon --count=3"
 testpaths = ["./tests"]
-
 asyncio_mode = "auto"
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 namespace_packages = true
 ignore_missing_imports = true
 no_site_packages = true
-
 
 [tool.coverage.report]
 exclude_lines = [
@@ -67,28 +81,31 @@ exclude_lines = [
 ]
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 
 line-length = 88
 indent-width = 4
 
 [tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "C",   # flake8-comprehensions
-    "B",   # flake8-bugbear
-    "UP",  # pyupgrade
-    "SIM", # flake8-simplify
-]
+select = ["ALL"]
+
 ignore = [
-    "B008", # do not perform function calls in argument defaults
-    "E501", # line too long
+    "A002",
+    "ANN401",
+    "COM812",
+    "D",
+    "B008",     # do not perform function calls in argument defaults
+    "E501",     # line too long
+    "N801",     # allow snake_case class names for SQL function elements
+    "N818",
+    "PTH123",
+    "PLW2901"
 ]
-fixable = ["ALL"]
-unfixable = []
+
+[tool.ruff.lint.per-file-ignores]
+"sqlargon/*" = ["PLC0415"]
+"sqlargon/types/*" = ["ARG002"]
+"tests/*" = ["S101", "ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "SLF001", "PLR2004", "ARG002"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -98,7 +115,7 @@ docstring-code-format = true
 docstring-code-line-length = "dynamic"
 line-ending = "auto"
 
-[tool.ruff.mccabe]
+[tool.ruff.lint.mccabe]
 max-complexity = 8
 
 [tool.deptry.per_rule_ignores]
@@ -111,24 +128,6 @@ DEP002 = [
 ]
 DEP003 = ["sqlargon", "typing_extensions", "pydantic_core"]
 
-
-[tool.semantic_release]
-version_variable = ['sqlargon/_version.py:__version__']
-version_toml = 'pyproject.toml:tool.poetry.version'
-version_pattern = [
-    'docs/index.md:Version: (\d+\.\d+\.\d+)',
-    'README.md:Version: (\d+\.\d+\.\d+)',
-]
-upload_to_repository = false
-major_on_zero = true
-hvcs = "github"
-commit_message = "Bump version: {version}"
-tag_commit = false
-
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
