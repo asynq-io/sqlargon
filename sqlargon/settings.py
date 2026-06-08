@@ -18,7 +18,7 @@ class DatabaseSettings(BaseSettings):
         "sqlargon.utils:json_loads"
     )
     connect_args: Optional[dict[str, Any]] = None
-    enable_tracker: bool = True
+    enable_tracker: bool = False
     poolclass: Optional[ImportedType[type[Pool]]] = None
     pool_size: Optional[int] = None
     max_overflow: Optional[int] = None
