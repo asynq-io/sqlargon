@@ -43,7 +43,7 @@ class Database:
     def __init__(
         self,
         url: str,
-        enable_tracker: bool = True,
+        enable_tracker: bool = False,
         json_serializer: Callable[[Any], str] = json_dumps,
         json_deserializer: Callable[[str], Any] = json_loads,
         **kwargs: Any,
