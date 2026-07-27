@@ -1,22 +1,42 @@
-from .abc import PaginationStrategy
-from .cursor import CursorPaginationStrategy
+from .abc import OffsetPaginator, PaginationStrategy, Paginator, SupportsPagination
+from .models import (
+    CursorPage,
+    NumberedPage,
+    OffsetPage,
+    Page,
+    TotalNumberedPage,
+    TotalOffsetPage,
+)
 from .offset_limit import (
-    OffsetLimitPaginationStrategy,
-    TotalOffsetLimitPaginationStrategy,
+    LimitOffsetPagination,
+    LimitOffsetPaginator,
+    TotalLimitOffsetPagination,
+    TotalLimitOffsetPaginator,
 )
 from .page import (
-    NumberedPaginationStrategy,
-    TotalNumberedPaginationStrategy,
+    PageNumberPagination,
+    PageNumberPaginator,
+    TotalPageNumberPagination,
+    TotalPageNumberPaginator,
 )
 
-TokenPaginationStrategy = CursorPaginationStrategy
-
 __all__ = [
-    "CursorPaginationStrategy",
-    "NumberedPaginationStrategy",
-    "OffsetLimitPaginationStrategy",
+    "CursorPage",
+    "LimitOffsetPagination",
+    "LimitOffsetPaginator",
+    "NumberedPage",
+    "OffsetPage",
+    "OffsetPaginator",
+    "Page",
+    "PageNumberPagination",
+    "PageNumberPaginator",
     "PaginationStrategy",
-    "TokenPaginationStrategy",
-    "TotalNumberedPaginationStrategy",
-    "TotalOffsetLimitPaginationStrategy",
+    "Paginator",
+    "SupportsPagination",
+    "TotalLimitOffsetPagination",
+    "TotalLimitOffsetPaginator",
+    "TotalNumberedPage",
+    "TotalOffsetPage",
+    "TotalPageNumberPagination",
+    "TotalPageNumberPaginator",
 ]

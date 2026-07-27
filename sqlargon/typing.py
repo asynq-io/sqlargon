@@ -2,11 +2,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, TypedDict
 
-from sqlalchemy.sql._typing import (
-    _DMLTableArgument,
-)
-
-TableT = _DMLTableArgument
 SingleValue = Mapping[str, Any]
 MultipleValues = Sequence[Mapping[str, Any]]
 Values = SingleValue | MultipleValues

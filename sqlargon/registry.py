@@ -3,41 +3,40 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .database import Database
+    from .cluster import AnyDatabase
 
 
-class DatabaseRegistry:
-    """Registry of named ``Database`` instances.
+_default_database: AnyDatabase | None = None
 
-    Allows repositories, units of work, and FastAPI dependencies to resolve a
-    ``Database`` by name at runtime — useful for read-replica / write-replica
-    topologies.
+
+def set_default_database(database: AnyDatabase | None) -> None:
+    """Set the process-wide default database (or clear it with ``None``).
+
+    Repositories and units of work that are not explicitly bound to a
+    database fall back to this one.
     """
-
-    def __init__(self) -> None:
-        self._databases: dict[str, Database] = {}
-
-    def register(self, database: Database) -> Database:
-        if database.name in self._databases:
-            msg = f"Database {database.name} already registered"
-            raise ValueError(msg)
-        self._databases[database.name] = database
-        return database
-
-    def unregister(self, name: str) -> Database | None:
-        return self._databases.pop(name, None)
-
-    def get(self, name: str = "default") -> Database:
-        return self[name]
-
-    def clear(self) -> None:
-        self._databases.clear()
-
-    def __contains__(self, name: str) -> bool:
-        return name in self._databases
-
-    def __getitem__(self, name: str) -> Database:
-        return self._databases[name]
+    global _default_database  # noqa: PLW0603
+    _default_database = database
 
 
-db_registry = DatabaseRegistry()
+def get_default_database() -> AnyDatabase:
+    """Return the default database, building it from ``DATABASE_*`` settings
+    on first use.
+
+    The built default is a plain :class:`~sqlargon.Database`, or a
+    primary/replica :class:`~sqlargon.DatabaseCluster` when
+    ``DATABASE_READ_REPLICAS`` is configured.
+    """
+    global _default_database  # noqa: PLW0603
+    if _default_database is None:
+        from .settings import DatabaseClusterSettings
+
+        if DatabaseClusterSettings().read_replicas:
+            from .cluster import DatabaseCluster
+
+            _default_database = DatabaseCluster.from_env()
+        else:
+            from .database import Database
+
+            _default_database = Database.from_env()
+    return _default_database

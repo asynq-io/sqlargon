@@ -20,8 +20,9 @@ repo_name: sqlargon
 repo_url: https://github.com/asynq-io/sqlargon
 nav:
   - "SQLArgon": index.md
+  - "Database Routing": routing.md
+  - "Pagination": pagination.md
   - "Alembic Migrations": migrations.md
-
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true

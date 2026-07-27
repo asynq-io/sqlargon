@@ -52,7 +52,7 @@ class ValidatedType(TypeDecorator, Generic[T]):
             return None
         if self._validate:
             value = self._type_adapter.validate_python(value)
-        return self._type_adapter.dump_python(value)
+        return self._type_adapter.dump_python(value, warnings=False)
 
     def process_result_value(self, value: Any, dialect: Dialect) -> T | None:
         if value is None:

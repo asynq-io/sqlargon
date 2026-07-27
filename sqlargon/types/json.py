@@ -220,6 +220,35 @@ def _json_has_all_keys_mysql(
     )
 
 
+class json_value(FunctionElement):
+    """Portable ``->>`` operator: text value at a JSON object key."""
+
+    name = "json_value"
+    type = sa.String()
+    inherit_cache = True
+
+    def __init__(self, column: Any, key: str) -> None:
+        self.column = column
+        self.key = key
+        super().__init__(column)
+
+
+@compiles(json_value, "postgresql")
+def _json_value_postgresql(element: json_value, compiler: Any, **kwargs: Any) -> str:
+    return compiler.process(
+        sa.type_coerce(element.column, postgresql.JSONB).op("->>")(element.key),
+        **kwargs,
+    )
+
+
+@compiles(json_value)
+def _json_value_default(element: json_value, compiler: Any, **kwargs: Any) -> str:
+    return compiler.process(
+        sa.func.json_extract(element.column, sa.literal(f'$."{element.key}"')),
+        **kwargs,
+    )
+
+
 class JSON(TypeDecorator):
     """
     JSON type that returns SQLAlchemy's dialect-specific JSON types, where
@@ -248,5 +277,8 @@ class JSON(TypeDecorator):
 
         def has_all_keys(self, other: Any) -> json_has_all_keys:
             return json_has_all_keys(self, other)
+
+        def json_value(self, other: Any) -> json_value:
+            return json_value(self, other)
 
     comparator_factory = ComparatorFactory

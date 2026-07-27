@@ -85,14 +85,11 @@ async def test_uow_double_enter_raises(user_repository_class):
             await uow.__aenter__()
 
 
-async def test_uow_database_not_initialized():
+async def test_uow_without_database_uses_default(db: Database):
     class TestUow(SQLAlchemyUnitOfWork):
         pass
 
-    uow = TestUow()
-    uow.use_db("nonexistent_db")
-    with pytest.raises(KeyError):
-        _ = uow.db
+    assert TestUow().db is db
 
 
 async def test_uow_commit(user_repository_class):
@@ -113,12 +110,29 @@ async def test_uow_rollback(user_repository_class):
         await uow.rollback()
 
 
-async def test_uow_init_subclass_with_database(db: Database, user_repository_class):
+async def test_uow_repositories_bound_to_uow_database(user_repository_class):
+    other_db = Database("sqlite+aiosqlite:///:memory:")
+
+    class TestUow(SQLAlchemyUnitOfWork):
+        users: user_repository_class
+
+    uow = TestUow().using(db=other_db)
+    assert uow.users.db is other_db
+
+
+async def test_uow_using_returns_fresh_unit(db: Database, user_repository_class):
+    other_db = Database("sqlite+aiosqlite:///:memory:")
+
     class TestUow(SQLAlchemyUnitOfWork):
         users: user_repository_class
 
     uow = TestUow()
+    rebound = uow.using(db=other_db, shard_key=1)
+    assert rebound is not uow
+    assert rebound.db is other_db
+    assert rebound.routing.shard_key == 1
     assert uow.db is db
+    assert rebound.users.db is other_db
 
 
 async def test_uow_unresolved_annotation():

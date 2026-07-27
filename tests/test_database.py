@@ -4,7 +4,6 @@ import pytest
 import sqlalchemy as sa
 
 from sqlargon import Database
-from sqlargon.registry import db_registry
 from sqlargon.settings import DatabaseSettings
 
 
@@ -54,24 +53,16 @@ async def test_lock(db: Database):
 
 
 def test_from_env():
-    db = Database.from_env(name="from_env_test")
-    try:
-        assert isinstance(db, Database)
-        assert db.dialect == "sqlite"
-    finally:
-        db_registry.unregister("from_env_test")
+    db = Database.from_env()
+    assert isinstance(db, Database)
+    assert db.dialect == "sqlite"
 
 
 def test_from_settings():
-    settings = DatabaseSettings(
-        url="sqlite+aiosqlite:///:memory:", name="from_settings_test"
-    )
+    settings = DatabaseSettings(url="sqlite+aiosqlite:///:memory:")
     db = Database(**settings.to_kwargs())
-    try:
-        assert isinstance(db, Database)
-        assert db.dialect == "sqlite"
-    finally:
-        db_registry.unregister("from_settings_test")
+    assert isinstance(db, Database)
+    assert db.dialect == "sqlite"
 
 
 async def test_inject_session(db: Database):

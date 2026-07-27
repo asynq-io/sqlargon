@@ -26,6 +26,8 @@ def _key_to_int(key: str) -> int:
 
 class PostgresqlQueryBuilder(QueryBuilder):
     supported_options = Option.RETURNING | Option.CONFLICTS | Option.LOCKS
+    _lock_query = sa.text("SELECT pg_advisory_lock(:key)")
+    _unlock_query = sa.text("SELECT pg_advisory_unlock(:key)")
 
     def _insert(
         self,
@@ -60,9 +62,9 @@ class PostgresqlQueryBuilder(QueryBuilder):
         return query
 
     def lock(self, key: str) -> sa.TextClause:
-        return sa.text("SELECT pg_advisory_lock(:key)").bindparams(key=_key_to_int(key))
+        int_key = _key_to_int(key)
+        return self._lock_query.bindparams(key=int_key)
 
     def unlock(self, key: str) -> sa.TextClause:
-        return sa.text("SELECT pg_advisory_unlock(:key)").bindparams(
-            key=_key_to_int(key)
-        )
+        int_key = _key_to_int(key)
+        return self._unlock_query.bindparams(key=int_key)

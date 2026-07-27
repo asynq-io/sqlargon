@@ -1,18 +1,13 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+from datetime import datetime
+from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
-from uuid_utils import uuid4, uuid7
+from uuid_utils.compat import uuid4, uuid7
 
-from .types import GUID, GenerateUUID, Timestamp, now
+from .types import GUID, GenerateUUID, GenerateUUIDV7, Timestamp, now
 from .utils import utc_now
-
-if TYPE_CHECKING:
-    from datetime import datetime
-    from uuid import UUID
 
 
 class UUIDModelMixin:
@@ -30,7 +25,7 @@ class UUIDV7ModelMixin:
         GUID(),
         primary_key=True,
         default=uuid7,
-        server_default=GenerateUUID(),
+        server_default=GenerateUUIDV7(),
         nullable=False,
     )
 
@@ -42,6 +37,7 @@ class CreatedUpdatedMixin:
         default=utc_now,
         nullable=False,
     )
+
     updated_at: Mapped[datetime] = mapped_column(
         Timestamp(),
         server_default=now(),

@@ -3,7 +3,7 @@ from uuid import uuid4
 import pytest
 import sqlalchemy as sa
 
-from sqlargon import Database, SQLAlchemyRepository
+from sqlargon import Database, SQLAlchemyRepository, set_default_database
 from sqlargon.types import GUID, GenerateUUID
 from sqlargon.typing import OnConflictOptions
 
@@ -11,6 +11,13 @@ from sqlargon.typing import OnConflictOptions
 @pytest.fixture(scope="session", autouse=True)
 def db():
     return Database.from_env()
+
+
+@pytest.fixture(autouse=True)
+def default_database(db: Database):
+    set_default_database(db)
+    yield db
+    set_default_database(None)
 
 
 @pytest.fixture(scope="session")

@@ -48,22 +48,63 @@ class GenerateUUID(FunctionElement):
     name = "uuid_default"
 
 
+class GenerateUUIDV7(FunctionElement):
+    name = "uuidv7_default"
+
+
 @compiles(GenerateUUID, "postgresql")
 @compiles(GenerateUUID)
 def _generate_uuid_postgresql(
     _element: GenerateUUID, _compiler: Any, **_kwargs: Any
 ) -> str:
-    """
-    Generates a UUID in Postgres. Uses uuidv7() on PostgreSQL 18+,
-    otherwise falls back to GEN_RANDOM_UUID() which requires pgcrypto.
-    """
-    version_info = getattr(_compiler.dialect, "server_version_info", None)
-    if version_info and version_info >= (18,):
-        return "uuidv7()"
     return "GEN_RANDOM_UUID()"
 
 
+@compiles(GenerateUUIDV7, "postgresql")
+@compiles(GenerateUUIDV7)
+def _generate_uuidv7_postgresql(
+    _element: GenerateUUID, _compiler: Any, **_kwargs: Any
+) -> str:
+    return "uuidv7()"
+
+
+@compiles(GenerateUUID, "mysql")
+def _generate_uuid_mysql(_element: GenerateUUID, _compiler: Any, **_kwargs: Any) -> str:
+    return (
+        "LOWER(CONCAT("
+        "HEX(RANDOM_BYTES(4)), '-',"
+        "HEX(RANDOM_BYTES(2)), '-4',"
+        "SUBSTR(HEX(RANDOM_BYTES(2)), 2), '-',"
+        "ELT((CONV(SUBSTR(HEX(RANDOM_BYTES(1)), 2, 1), 16, 10) % 4) + 1, '8', '9', 'a', 'b'),"
+        "SUBSTR(HEX(RANDOM_BYTES(2)), 2), '-',"
+        "HEX(RANDOM_BYTES(6))"
+        "))"
+    )
+
+
+@compiles(GenerateUUIDV7, "mysql")
+def _generate_uuidv7_mysql(
+    _element: GenerateUUIDV7, _compiler: Any, **_kwargs: Any
+) -> str:
+    """
+    Generates a UUID v7 in MySQL using the unix timestamp in milliseconds as the
+    time component, and cryptographically random bytes for the random component.
+    Requires MySQL 5.6.1+ (RANDOM_BYTES) and MySQL 5.6.4+ (NOW(3) precision).
+    """
+    return (
+        "LOWER(CONCAT("
+        "LPAD(HEX(FLOOR(UNIX_TIMESTAMP(NOW(3)) * 1000) DIV 65536), 8, '0'), '-',"
+        "LPAD(HEX(FLOOR(UNIX_TIMESTAMP(NOW(3)) * 1000) MOD 65536), 4, '0'), '-7',"
+        "SUBSTR(HEX(RANDOM_BYTES(2)), 2), '-',"
+        "ELT((CONV(SUBSTR(HEX(RANDOM_BYTES(1)), 2, 1), 16, 10) % 4) + 1, '8', '9', 'a', 'b'),"
+        "SUBSTR(HEX(RANDOM_BYTES(2)), 2), '-',"
+        "HEX(RANDOM_BYTES(6))"
+        "))"
+    )
+
+
 @compiles(GenerateUUID, "sqlite")
+@compiles(GenerateUUIDV7, "sqlite")
 def _generate_uuid_sqlite(
     _element: GenerateUUID, _compiler: Any, **_kwargs: Any
 ) -> str:

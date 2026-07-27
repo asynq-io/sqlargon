@@ -6,7 +6,6 @@ from sqlalchemy.exc import NoResultFound
 
 from sqlargon import Database, SQLAlchemyRepository
 from sqlargon.functools import atomic
-from sqlargon.registry import db_registry
 
 
 async def test_empty_repo(user_repository):
@@ -263,16 +262,21 @@ async def test_init_subclass_invalid_model():
             pass
 
 
-async def test_ensure_db_no_overwrite(user_repository_class):
-    other_db = Database(
-        "sqlite+aiosqlite:///:memory:", name="other_test_db", enable_tracker=False
-    )
-    try:
-        repo = user_repository_class()
-        repo.use_db("other_test_db")
-        assert repo.db is other_db
-    finally:
-        db_registry.unregister("other_test_db")
+async def test_repository_database_binding(user_repository_class):
+    other_db = Database("sqlite+aiosqlite:///:memory:")
+
+    repo = user_repository_class().using(db=other_db)
+    assert repo.db is other_db
+    assert user_repository_class().db is not other_db
+
+
+async def test_repository_database_binding_preserved_across_chaining(
+    user_repository_class,
+):
+    other_db = Database("sqlite+aiosqlite:///:memory:")
+
+    repo = user_repository_class().using(db=other_db)
+    assert repo.filter(name="John").db is other_db
 
 
 async def test_atomic_decorator(user_repository_class):

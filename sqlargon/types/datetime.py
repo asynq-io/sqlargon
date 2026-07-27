@@ -3,7 +3,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy import Dialect, FunctionElement, TypeDecorator
-from sqlalchemy.dialects import postgresql, sqlite
+from sqlalchemy.dialects import mysql, postgresql, sqlite
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.types import TypeEngine
 
@@ -23,6 +23,8 @@ class Timestamp(TypeDecorator):
             return dialect.type_descriptor(postgresql.TIMESTAMP(timezone=True))
         if dialect.name == "sqlite":
             return dialect.type_descriptor(sqlite.DATETIME())
+        if dialect.name == "mysql":
+            return dialect.type_descriptor(mysql.DATETIME(fsp=6))
         return dialect.type_descriptor(sa.TIMESTAMP(timezone=True))
 
     def process_bind_param(self, value: Any, dialect: Dialect) -> Any:
@@ -31,7 +33,7 @@ class Timestamp(TypeDecorator):
         if value.tzinfo is None:
             msg = "Timestamps must have a timezone."
             raise ValueError(msg)
-        if dialect.name == "sqlite":
+        if dialect.name in ("sqlite", "mysql"):
             return value.astimezone(timezone.utc)
         return value
 
@@ -51,6 +53,12 @@ class now(FunctionElement):
     name = "now"
     # see https://docs.sqlalchemy.org/en/14/core/compiler.html#enabling-caching-support-for-custom-constructs
     inherit_cache = True
+
+
+@compiles(now, "mysql")
+def _current_timestamp_mysql(_element: now, _compiler: Any, **_kwargs: Any) -> str:
+    """Generates the current timestamp for MySQL with microsecond precision."""
+    return "CURRENT_TIMESTAMP(6)"
 
 
 @compiles(now, "sqlite")

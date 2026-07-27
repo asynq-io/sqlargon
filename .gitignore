@@ -35,4 +35,4 @@ site/
 # mypy
 .mypy_cache
 tmp.db
-.python-version
+.serena/

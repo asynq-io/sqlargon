@@ -76,30 +76,30 @@ class QueryBuilder:
     def insert(
         self,
         table: _DMLTableArgument,
-        values: Values | None = None,
+        values: Values | None = ...,
         *,
-        return_results: Literal[False] = False,
-        on_conflict: OnConflict | None = None,
+        return_results: Literal[False] = ...,
+        on_conflict: OnConflict | None = ...,
     ) -> sa.Insert: ...
 
     @overload
     def insert(
         self,
         table: _DMLTableArgument,
-        values: Values | None = None,
+        values: Values | None = ...,
         *,
         return_results: Literal[True],
-        on_conflict: OnConflict | None = None,
+        on_conflict: OnConflict | None = ...,
     ) -> ReturningInsert: ...
 
     @overload
     def insert(
         self,
         table: _DMLTableArgument,
-        values: Values | None = None,
+        values: Values | None = ...,
         *,
-        return_results: bool = False,
-        on_conflict: OnConflict | None = None,
+        return_results: bool = ...,
+        on_conflict: OnConflict | None = ...,
     ) -> sa.Insert | ReturningInsert: ...
 
     def insert(
@@ -121,16 +121,16 @@ class QueryBuilder:
     def update(
         self,
         table: _DMLTableArgument,
-        values: Values | None = None,
+        values: Values | None = ...,
         *,
-        return_results: Literal[False] = False,
+        return_results: Literal[False] = ...,
     ) -> sa.Update: ...
 
     @overload
     def update(
         self,
         table: _DMLTableArgument,
-        values: Values | None = None,
+        values: Values | None = ...,
         *,
         return_results: Literal[True],
     ) -> ReturningUpdate: ...
@@ -139,9 +139,9 @@ class QueryBuilder:
     def update(
         self,
         table: _DMLTableArgument,
-        values: Values | None = None,
+        values: Values | None = ...,
         *,
-        return_results: bool = False,
+        return_results: bool,
     ) -> sa.Update | ReturningUpdate: ...
 
     def update(
@@ -151,6 +151,7 @@ class QueryBuilder:
         *,
         return_results: bool = False,
     ) -> sa.Update | ReturningUpdate:
+
         if return_results and not self.supports(Option.RETURNING):
             raise UnsupportedOption
         query = sa.update(table)
@@ -162,7 +163,7 @@ class QueryBuilder:
 
     @overload
     def delete(
-        self, table: _DMLTableArgument, *, return_results: Literal[False] = False
+        self, table: _DMLTableArgument, *, return_results: Literal[False] = ...
     ) -> sa.Delete: ...
 
     @overload
@@ -172,7 +173,7 @@ class QueryBuilder:
 
     @overload
     def delete(
-        self, table: _DMLTableArgument, *, return_results: bool = False
+        self, table: _DMLTableArgument, *, return_results: bool = ...
     ) -> sa.Delete | ReturningDelete: ...
 
     def delete(
@@ -196,11 +197,11 @@ class QueryBuilder:
 
     def count(
         self,
-        table: _FromClauseArgument,
+        from_: _FromClauseArgument,
         *args: _ColumnExpressionArgument[bool],
         **kwargs: Any,
     ) -> sa.Select[tuple[int, ...]]:
-        query = self.select(sa.func.count()).select_from(table)
+        query = self.select(sa.func.count()).select_from(from_)
         return self.filter(query, *args, **kwargs)
 
     @overload
@@ -208,8 +209,8 @@ class QueryBuilder:
         self,
         query: sa.Select,
         *,
-        offset: int = 1,
-        limit: int = 100,
+        offset: int = ...,
+        limit: int = ...,
         include_total: Literal[True],
     ) -> tuple[sa.Select, sa.Select[tuple[int, ...]]]: ...
 
@@ -218,9 +219,9 @@ class QueryBuilder:
         self,
         query: sa.Select,
         *,
-        offset: int = 1,
-        limit: int = 100,
-        include_total: Literal[False],
+        offset: int = ...,
+        limit: int = ...,
+        include_total: Literal[False] = ...,
     ) -> tuple[sa.Select, None]: ...
 
     @overload
@@ -228,9 +229,9 @@ class QueryBuilder:
         self,
         query: sa.Select,
         *,
-        offset: int = 1,
-        limit: int = 100,
-        include_total: bool = False,
+        offset: int = ...,
+        limit: int = ...,
+        include_total: bool = ...,
     ) -> tuple[sa.Select, None] | tuple[sa.Select, sa.Select[tuple[int, ...]]]: ...
 
     def page(
@@ -247,11 +248,11 @@ class QueryBuilder:
 
     def lock(self, key: str) -> sa.TextClause:
         msg = f"Cannot obtain lock for key {key}"
-        raise UnsupportedOption(msg)
+        raise NotImplementedError(msg)
 
     def unlock(self, key: str) -> sa.TextClause:
         msg = f"Cannot release lock for key {key}"
-        raise UnsupportedOption(msg)
+        raise NotImplementedError(msg)
 
     def get_lock_pair(self, key: str) -> tuple[sa.TextClause, sa.TextClause]:
         if not self.supports(Option.LOCKS):
