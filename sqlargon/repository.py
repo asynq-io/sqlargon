@@ -226,9 +226,12 @@ class SQLAlchemyRepository(Generic[Model]):
         query = self.qb.delete(self.model, return_results=return_results)
         return self.copy(query)
 
-    def filter(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> Self:
+    def where(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> Self:
         query = self.qb.filter(self.query, *args, **kwargs)
         return self.copy(query)
+
+    def filter(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> Self:
+        return self.where(*args, **kwargs)
 
     def join(
         self,
