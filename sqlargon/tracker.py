@@ -13,7 +13,6 @@ class ConnectionTracker:
     make it easy to see which connections are currently checked out and open."""
 
     def __init__(self) -> None:
-        self.all_connections: ConnDict = {}
         self.open_connections: ConnDict = {}
         self.left_field_closes: ConnDict = {}
         self.connects = 0
@@ -29,7 +28,6 @@ class ConnectionTracker:
         adapted_connection: AdaptedConnection,
         _connection_record: ConnectionPoolEntry,
     ) -> None:
-        self.all_connections[adapted_connection] = traceback.format_stack()
         self.open_connections[adapted_connection] = traceback.format_stack()
         self.connects += 1
 
@@ -55,7 +53,6 @@ class ConnectionTracker:
         self.closes += 1
 
     def clear(self) -> None:
-        self.all_connections.clear()
         self.open_connections.clear()
         self.left_field_closes.clear()
         self.connects = 0

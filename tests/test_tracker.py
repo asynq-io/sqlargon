@@ -27,7 +27,6 @@ def test_tracker_is_singleton_and_starts_empty(tracker):
     assert isinstance(tracker, ConnectionTracker)
     assert tracker.connects == 0
     assert tracker.closes == 0
-    assert tracker.all_connections == {}
     assert tracker.open_connections == {}
     assert tracker.left_field_closes == {}
 
@@ -39,7 +38,6 @@ async def test_track_pool_records_connect(tracker, tracked_database):
     assert tracker.connects == 1
     assert tracker.closes == 0
     assert len(tracker.open_connections) == 1
-    assert set(tracker.open_connections) == set(tracker.all_connections)
     assert tracker.left_field_closes == {}
 
     stack = next(iter(tracker.open_connections.values()))
@@ -51,15 +49,13 @@ async def test_track_pool_records_close_on_dispose(tracker, tracked_database):
     async with tracked_database.session() as session:
         await session.execute(sa.text("SELECT 1"))
 
-    connection = next(iter(tracker.open_connections))
+    assert len(tracker.open_connections) == 1
 
     await tracked_database.dispose()
 
     assert tracker.closes == 1
     assert tracker.open_connections == {}
     assert tracker.left_field_closes == {}
-    # closed connections stay in the history of all connections
-    assert connection in tracker.all_connections
 
 
 async def test_database_without_tracker_is_not_tracked(tracker, db: Database):
@@ -67,7 +63,6 @@ async def test_database_without_tracker_is_not_tracked(tracker, db: Database):
         await session.execute(sa.text("SELECT 1"))
 
     assert tracker.connects == 0
-    assert tracker.all_connections == {}
     assert tracker.open_connections == {}
 
 
@@ -78,9 +73,7 @@ def test_on_connect_records_connection(tracker):
 
     assert tracker.connects == 1
     assert tracker.closes == 0
-    assert connection in tracker.all_connections
     assert connection in tracker.open_connections
-    assert tracker.all_connections[connection]
     assert tracker.open_connections[connection]
 
 
@@ -97,7 +90,6 @@ def test_close_removes_open_connection(tracker, method_name, extra_args):
     assert tracker.closes == 1
     assert tracker.open_connections == {}
     assert tracker.left_field_closes == {}
-    assert connection in tracker.all_connections
 
 
 @pytest.mark.parametrize(
@@ -114,19 +106,17 @@ def test_close_of_untracked_connection_is_left_field(tracker, method_name, extra
     assert connection in tracker.left_field_closes
     assert tracker.left_field_closes[connection]
     assert tracker.open_connections == {}
-    assert tracker.all_connections == {}
 
 
 def test_clear_resets_all_state(tracker):
     tracker.on_connect(object(), None)
     tracker.on_close(object(), None)
-    assert tracker.all_connections
+    assert tracker.open_connections
     assert tracker.left_field_closes
 
     tracker.clear()
 
     assert tracker.connects == 0
     assert tracker.closes == 0
-    assert tracker.all_connections == {}
     assert tracker.open_connections == {}
     assert tracker.left_field_closes == {}
