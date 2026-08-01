@@ -32,7 +32,8 @@ unit of work are bound to the unit's database.
 Clusters build from the same settings with `DatabaseCluster.from_env()` —
 always a cluster (single-primary when no replicas are configured), with an
 optional `router=` override for custom topologies over the configured
-databases.
+databases. The full list of variables is in the
+[settings reference](reference/settings.md).
 
 ## Read replicas
 
@@ -74,7 +75,7 @@ Replicas are `ReadOnlyDatabase` objects: any DML executed against one raises
 from sqlargon import using
 
 with using("replica_0"):                 # context manager (a context variable
-    users = await repo.all()             # under the hood, so plain ``with``)
+    users = await repo.all()             # under the hood, so plain `with`)
 
 @using(read_only=True)                   # decorator
 async def report() -> None: ...
@@ -85,23 +86,25 @@ await repo.using(shard_key=tenant_id).create(**values)
 
 ## FastAPI
 
-Repository and unit-of-work ``__init__`` take no arguments, so subclasses
+Repository and unit-of-work `__init__` take no arguments, so subclasses
 work directly as dependencies — no routing knobs leak into the endpoint
 signature:
 
 ```python
-from fastapi import Depends, FastAPI
+from typing import Annotated
 
-from sqlargon.fastapi import Provide  # Provide[T] == Annotated[T, Depends()]
+from fastapi import Depends, FastAPI
 
 app = FastAPI()
 
 @app.get("/users")
-async def list_users(repo: Provide[UserRepository]) -> list[UserOut]:
+async def list_users(repo: Annotated[UserRepository, Depends()]) -> list[UserOut]:
     return await repo.all()
 
 @app.post("/orders")
-async def create_order(data: OrderIn, uow: Provide[OrdersUow]) -> OrderOut:
+async def create_order(
+    data: OrderIn, uow: Annotated[OrdersUow, Depends()]
+) -> OrderOut:
     async with uow:
         return await uow.orders.create(**data.model_dump())
 ```
@@ -164,7 +167,7 @@ async with OrdersUow().using(shard_key=tenant_shard(tenant_id)) as uow:
     await uow.orders.create(**values)
 ```
 
-Any object with a ``route(databases, context)`` method is a valid router, so
+Any object with a `route(databases, context)` method is a valid router, so
 custom policies (e.g. tenant lookup tables) plug in directly.
 
 ## Routing rules
@@ -174,8 +177,8 @@ For every statement, the target database is resolved in order:
 1. **Pinned transaction** — inside an open `session_context` / unit of work,
    every statement uses the pinned database. A conflicting explicit hint
    raises `RoutingError` instead of silently splitting the transaction.
-2. **Explicit hint** — `using(...)`, `repo.using(...)`, or unit-of-work
-   `hint=` / `shard_key=` arguments.
+2. **Explicit hint** — `using(...)`, `repo.using(...)` or `uow.using(...)`
+   (`hint` / `read_only` / `shard_key`).
 3. **Router decision** — based on the statement (read/write), the model and
    the shard key.
 4. **Default database.**

@@ -1,5 +1,7 @@
 import pytest
 import sqlalchemy as sa
+from sqlalchemy import orm
+from sqlalchemy.dialects import postgresql
 
 from sqlargon.query_builder import (
     Option,
@@ -46,6 +48,33 @@ def test_query_builder_select_with_for_update(qb):
     assert query is not None
 
 
+def test_query_builder_select_with_for_update_true(qb):
+    query = qb.select(sa.literal(1), with_for_update=True)
+    assert str(query.compile(dialect=postgresql.dialect())).endswith("FOR UPDATE")
+
+
+def test_query_builder_select_with_for_update_options(qb):
+    query = qb.select(sa.literal(1), with_for_update={"nowait": True, "read": True})
+    assert str(query.compile(dialect=postgresql.dialect())).endswith("FOR SHARE NOWAIT")
+
+
+@pytest.mark.parametrize("with_for_update", [None, False])
+def test_query_builder_select_without_for_update(qb, with_for_update):
+    query = qb.select(sa.literal(1), with_for_update=with_for_update)
+    assert "FOR UPDATE" not in str(query.compile(dialect=postgresql.dialect()))
+
+
+def test_query_builder_select_with_options(qb, user_model):
+    query = qb.select(user_model, options=(orm.load_only(user_model.name),))
+    sql = str(query)
+    assert "name" in sql
+    assert "last_name" not in sql
+
+
+def test_query_builder_select_without_options_loads_all_columns(qb, user_model):
+    assert "last_name" in str(qb.select(user_model))
+
+
 def test_query_builder_insert(qb):
     t = sa.table("t", sa.column("a"))
     query = qb.insert(t, {"a": 1})
@@ -56,6 +85,14 @@ def test_query_builder_insert_returning_unsupported(qb):
     t = sa.table("t", sa.column("a"))
     with pytest.raises(UnsupportedOption):
         qb.insert(t, {"a": 1}, return_results=True)
+
+
+@pytest.mark.parametrize("do", ["ignore", "update"])
+def test_query_builder_insert_on_conflict_unsupported(qb, do):
+    t = sa.table("t", sa.column("a"))
+    on_conflict = OnConflict(do=do, options={"index_elements": {"a"}, "set_": {"a"}})
+    with pytest.raises(UnsupportedOption):
+        qb.insert(t, {"a": 1}, on_conflict=on_conflict)
 
 
 def test_query_builder_update(qb):
@@ -128,6 +165,20 @@ def test_query_builder_unlock_not_implemented(qb):
 def test_query_builder_get_lock_pair_unsupported(qb):
     with pytest.raises(UnsupportedOption):
         qb.get_lock_pair("test")
+
+
+@pytest.mark.parametrize("dialect", ["postgresql", "mysql"])
+def test_query_builder_get_lock_pair(dialect):
+    qb = get_query_builder(dialect)
+    lock, unlock = qb.get_lock_pair("test")
+    assert str(lock) == str(qb.lock("test"))
+    assert str(unlock) == str(qb.unlock("test"))
+    assert lock.compile().params == unlock.compile().params
+
+
+def test_sqlite_get_lock_pair_unsupported(sqlite_qb):
+    with pytest.raises(UnsupportedOption):
+        sqlite_qb.get_lock_pair("test")
 
 
 def test_sqlite_query_builder_options(sqlite_qb):

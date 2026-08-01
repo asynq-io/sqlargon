@@ -26,6 +26,19 @@ def test_get_default_database_builds_from_env():
     assert get_default_database() is default
 
 
+async def test_get_default_database_builds_cluster_when_replicas_configured(
+    monkeypatch,
+):
+    monkeypatch.setenv("DATABASE_READ_REPLICAS", f'["{MEMORY_URL}"]')
+    default = get_default_database()
+    try:
+        assert isinstance(default, DatabaseCluster)
+        assert len(default.replicas) == 1
+        assert get_default_database() is default
+    finally:
+        await default.dispose()
+
+
 def test_set_default_database_overrides():
     db = Database(MEMORY_URL)
     set_default_database(db)

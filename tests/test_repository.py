@@ -1,11 +1,47 @@
 from uuid import uuid4
 
 import pytest
+import sqlalchemy as sa
 from sqlalchemy import Result
-from sqlalchemy.exc import NoResultFound
+from sqlalchemy.exc import NoResultFound, SQLAlchemyError
+from sqlalchemy.orm import aliased, relationship
 
-from sqlargon import Database, SQLAlchemyRepository
+from sqlargon import Base, Database, SQLAlchemyRepository
 from sqlargon.functools import atomic
+
+
+# Declared at module level: pytest-repeat re-runs every test, and a model
+# declared inside a test would clash with itself on the second run.
+class CamelCaseUser(Base):
+    id = sa.Column(sa.Integer, primary_key=True)
+
+
+class Team(Base):
+    __tablename__ = "test_load_team"
+    id = sa.Column(sa.Integer, primary_key=True)
+    members = relationship("Member", back_populates="team")
+
+
+class Member(Base):
+    __tablename__ = "test_load_member"
+    id = sa.Column(sa.Integer, primary_key=True)
+    team_id = sa.Column(sa.ForeignKey("test_load_team.id"))
+    team = relationship(Team, back_populates="members")
+
+
+class TeamRepository(SQLAlchemyRepository[Team]):
+    pass
+
+
+@pytest.fixture
+async def team_tables(db: Database):
+    async with db.engine.begin() as conn:
+        await conn.run_sync(Team.__table__.create, checkfirst=True)
+        await conn.run_sync(Member.__table__.create, checkfirst=True)
+    yield
+    async with db.engine.begin() as conn:
+        await conn.run_sync(Member.__table__.drop, checkfirst=True)
+        await conn.run_sync(Team.__table__.drop, checkfirst=True)
 
 
 async def test_empty_repo(user_repository):
@@ -289,3 +325,138 @@ async def test_atomic_decorator(user_repository_class):
     repo = Repo()
     await repo.create_users(["Alice", "Bob"])
     assert await repo.count() == 2
+
+
+def test_tablename_is_derived_from_camel_case_class_name():
+    assert CamelCaseUser.__tablename__ == "camel_case_user"
+
+
+@pytest.mark.parametrize(
+    ("isouter", "expected"), [(False, ["Alice"]), (True, ["Alice", "Bob"])]
+)
+async def test_join(user_repository, user_model, isouter, expected):
+    await user_repository.insert(
+        [{"name": "Alice", "last_name": "Bob"}, {"name": "Bob", "last_name": None}]
+    ).execute()
+    manager = aliased(user_model)
+    users = await (
+        user_repository.select()
+        .join(manager, manager.name == user_model.last_name, isouter=isouter)
+        .all()
+    )
+    assert sorted(user.name for user in users) == expected
+
+
+async def test_execute_many(user_repository, user_model):
+    qb = user_repository.qb
+    await user_repository.execute_many(
+        qb.insert(user_model, {"name": "Alice"}),
+        qb.insert(user_model, {"name": "Bob"}),
+    )
+    assert await user_repository.count() == 2
+
+
+async def test_update_many(user_repository):
+    await user_repository.insert([{"name": "Alice"}, {"name": "Bob"}]).execute()
+    await user_repository.update_many({"last_name": "Smith"}, name="Alice")
+    alice = await user_repository.get(name="Alice")
+    bob = await user_repository.get(name="Bob")
+    assert alice is not None
+    assert alice.last_name == "Smith"
+    assert bob is not None
+    assert bob.last_name is None
+
+
+async def test_bulk_create_or_update_with_return(user_repository):
+    users = [{"name": "Alice"}, {"name": "Bob"}]
+    result = await user_repository.bulk_create_or_update(users, return_results=True)
+    assert {user.name for user in result} == {"Alice", "Bob"}
+
+
+async def test_bulk_update_with_return(user_repository):
+    await user_repository.insert([{"name": "John"}, {"name": "Vincent"}]).execute()
+    result = await user_repository.bulk_update(
+        [{"name": "John", "last_name": "Connor"}], {"name"}, return_results=True
+    )
+    john = await user_repository.get(name="John")
+    assert john is not None
+    assert john.last_name == "Connor"
+    # bulk_update runs on a core connection, so RETURNING yields scalar ids.
+    assert list(result) == [john.id]
+
+
+async def test_get_chunk_for_update_applies_values(user_repository, user_model):
+    await user_repository.insert(
+        [{"name": "Alice"}, {"name": "Bob"}, {"name": "Charlie"}]
+    ).execute()
+
+    async with user_repository.get_chunk_for_update(
+        {"last_name": "processed"}, 2, "id", user_model.name
+    ) as chunk:
+        assert [user.name for user in chunk] == ["Alice", "Bob"]
+        assert all(user.last_name is None for user in chunk)
+
+    processed = await user_repository.filter(last_name="processed").all()
+    assert {user.name for user in processed} == {"Alice", "Bob"}
+    assert await user_repository.count(last_name=None) == 1
+
+
+async def test_get_chunk_for_update_removes_chunk_without_values(
+    user_repository, user_model
+):
+    await user_repository.insert(
+        [{"name": "Alice"}, {"name": "Bob"}, {"name": "Charlie"}]
+    ).execute()
+
+    async with user_repository.get_chunk_for_update(
+        None, 2, "id", user_model.name
+    ) as chunk:
+        assert [user.name for user in chunk] == ["Alice", "Bob"]
+        assert await user_repository.count() == 3
+
+    assert [user.name for user in await user_repository.all()] == ["Charlie"]
+
+
+async def test_get_chunk_for_update_filters_and_orders_by_primary_key(user_repository):
+    await user_repository.insert(
+        [{"name": "Alice", "last_name": "new"}, {"name": "Bob", "last_name": "done"}]
+    ).execute()
+
+    async with user_repository.get_chunk_for_update(
+        {"last_name": "done"}, 10, "id", None, last_name="new"
+    ) as chunk:
+        assert [user.name for user in chunk] == ["Alice"]
+
+    assert await user_repository.count(last_name="done") == 2
+
+
+async def test_get_chunk_for_update_on_empty_table(user_repository):
+    async with user_repository.get_chunk_for_update({"last_name": "done"}) as chunk:
+        assert list(chunk) == []
+
+    assert await user_repository.count() == 0
+
+
+@pytest.mark.usefixtures("team_tables")
+async def test_load_eagerly_loads_relationship(db: Database):
+    repository = TeamRepository()
+    await repository.insert({"id": 1}).execute()
+    await db.execute(
+        sa.insert(Member).values([{"id": 1, "team_id": 1}, {"id": 2, "team_id": 1}])
+    )
+
+    teams = await repository.load(Team.members).all()
+
+    # the session is closed by now, so members are only reachable if eagerly loaded
+    assert [len(team.members) for team in teams] == [2]
+
+
+@pytest.mark.usefixtures("team_tables")
+async def test_relationship_is_lazy_without_load():
+    repository = TeamRepository()
+    await repository.insert({"id": 1}).execute()
+
+    team = await repository.select().one()
+
+    with pytest.raises(SQLAlchemyError):
+        _ = team.members

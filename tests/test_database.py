@@ -1,10 +1,44 @@
 import sqlite3
+from datetime import datetime, timezone
 
 import pytest
 import sqlalchemy as sa
 
 from sqlargon import Database
+from sqlargon.query_builder import Option, QueryBuilder
+from sqlargon.routing import RoutingContext
 from sqlargon.settings import DatabaseSettings
+from sqlargon.utils import utc_now
+
+
+class LockingQueryBuilder(QueryBuilder):
+    """A builder advertising native locks, with statements SQLite can run."""
+
+    supported_options = Option.LOCKS
+
+    def lock(self, key: str) -> sa.TextClause:
+        return sa.text("SELECT :key AS acquired").bindparams(key=key)
+
+    def unlock(self, key: str) -> sa.TextClause:
+        return sa.text("SELECT :key AS released").bindparams(key=key)
+
+
+@pytest.fixture
+def executed_statements(db: Database):
+    statements: list[str] = []
+
+    def before_execute(_conn, clauseelement, _multiparams, _params, _options):
+        statements.append(str(clauseelement))
+
+    sa.event.listen(db.engine.sync_engine, "before_execute", before_execute)
+    yield statements
+    sa.event.remove(db.engine.sync_engine, "before_execute", before_execute)
+
+
+@pytest.fixture
+def locking_query_builder(db: Database, monkeypatch):
+    monkeypatch.setattr(db, "query_builder", LockingQueryBuilder())
+    return db.query_builder
 
 
 def test_create_database(db: Database):
@@ -18,6 +52,12 @@ def test_database_dialect(db: Database):
 async def test_create_all_drop_all(db: Database):
     await db.create_all()
     await db.drop_all()
+
+
+def test_route_always_returns_self(db: Database):
+    # interface parity with DatabaseCluster: a single database routes to itself
+    assert db.route() is db
+    assert db.route(RoutingContext.create(read_only=True)) is db
 
 
 async def test_session(db: Database):
@@ -98,3 +138,72 @@ async def test_atomic(db: Database):
 
 def test_sqlite_version():
     assert sqlite3.sqlite_version > "3.35"
+
+
+async def test_lock_uses_process_local_lock_on_sqlite(db: Database):
+    async with db.lock("chunk"):
+        assert "chunk" in db._locks
+    assert "chunk" not in db._locks
+
+
+@pytest.mark.usefixtures("locking_query_builder")
+async def test_lock_uses_native_lock_when_dialect_supports_it(
+    db: Database, executed_statements
+):
+    async with db.lock("chunk"):
+        assert any("acquired" in statement for statement in executed_statements)
+        assert not any("released" in statement for statement in executed_statements)
+        assert "chunk" not in db._locks
+    assert any("released" in statement for statement in executed_statements)
+
+
+@pytest.mark.usefixtures("locking_query_builder")
+async def test_native_lock_releases_on_error(db: Database, executed_statements):
+    msg = "boom"
+    with pytest.raises(ValueError, match=msg):
+        async with db.native_lock("chunk"):
+            raise ValueError(msg)
+    assert any("acquired" in statement for statement in executed_statements)
+    assert any("released" in statement for statement in executed_statements)
+
+
+async def test_with_lock_as_decorator_factory(db: Database):
+    held = []
+
+    @db.with_lock(key="task")
+    async def work():
+        held.append("task" in db._locks)
+        return "done"
+
+    assert await work() == "done"
+    assert held == [True]
+    assert work.__name__ == "work"
+    assert "task" not in db._locks
+
+
+async def test_with_lock_called_directly(db: Database):
+    async def work():
+        return "task" in db._locks
+
+    wrapped = db.with_lock(work, key="task")
+    assert await wrapped() is True
+    assert "task" not in db._locks
+
+
+async def test_with_lock_releases_on_error(db: Database):
+    msg = "boom"
+
+    @db.with_lock(key="task")
+    async def work():
+        raise ValueError(msg)
+
+    with pytest.raises(ValueError, match=msg):
+        await work()
+    assert "task" not in db._locks
+
+
+def test_utc_now_is_timezone_aware():
+    before = datetime.now(tz=timezone.utc)
+    value = utc_now()
+    assert value.tzinfo is timezone.utc
+    assert before <= value <= datetime.now(tz=timezone.utc)

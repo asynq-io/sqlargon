@@ -6,7 +6,6 @@ from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from functools import wraps
 from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, overload
-from uuid import uuid4
 
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -156,30 +155,29 @@ class BaseDatabase(ABC):
 
     @overload
     def with_lock(
-        self, fn: Callable[P, Awaitable[R]], *, name: str | None = None
+        self, fn: Callable[P, Awaitable[R]], *, key: str
     ) -> Callable[P, Awaitable[R]]: ...
 
     @overload
     def with_lock(
-        self, fn: None = None, *, name: str | None = None
+        self, fn: None = None, *, key: str
     ) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]: ...
 
     def with_lock(
         self,
         fn: Callable[P, Awaitable[R]] | None = None,
         *,
-        name: str | None = None,
+        key: str,
     ) -> (
         Callable[P, Awaitable[R]]
         | Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]
     ):
         """Run the decorated coroutine while holding the named :meth:`lock`."""
-        lock_name = name or str(uuid4())
 
         def wrapper(fn: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
             @wraps(fn)
             async def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
-                async with self.lock(lock_name):
+                async with self.lock(key):
                     return await fn(*args, **kwargs)
 
             return wrapped

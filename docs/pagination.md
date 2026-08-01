@@ -14,7 +14,7 @@ class UserRepository(SQLAlchemyRepository[User]):
     paginate = PageNumberPagination(default_page_size=25)
 
 
-page = await UserRepository().filter(User.is_active).paginate(page=2)
+page = await UserRepository().filter(User.not_deleted).paginate(page=2)
 # NumberedPage[User] -- page.items is Sequence[User]
 ```
 
@@ -94,7 +94,7 @@ Pagination composes with the rest of the repository API — it paginates the
 repository's current query and follows its routing preference:
 
 ```python
-await repo.filter(User.is_active).using(read_only=True).paginate(page=1)
+await repo.filter(User.not_deleted).using(read_only=True).paginate(page=1)
 ```
 
 Pagination never forces `read_only` routing by itself; opt in with
@@ -135,6 +135,8 @@ from typing import Annotated
 from annotated_types import Interval
 from fastapi import Depends, FastAPI
 
+from sqlargon.pagination import TotalNumberedPage
+
 PageNumber = Annotated[int, Interval(ge=1)]
 PageSize = Annotated[int, Interval(ge=1, le=100)]
 
@@ -149,3 +151,7 @@ async def list_users(
 ) -> TotalNumberedPage[UserModel]:
     return await repo.paginate(page, page_size)
 ```
+
+Pages are plain dataclasses, so a pydantic response model reads them with
+`model_config = {"from_attributes": True}` — see the
+[FastAPI example](examples.md#a-fastapi-service) for the complete service.

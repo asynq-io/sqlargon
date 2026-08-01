@@ -13,6 +13,7 @@ from sqlargon import (
     ShardRouter,
     SQLAlchemyRepository,
     SQLAlchemyUnitOfWork,
+    use_context,
     using,
 )
 
@@ -89,6 +90,39 @@ async def test_using_as_decorator():
     assert RoutingContext.create().hint is None
 
 
+async def test_use_context_dependency_applies_and_resets_markers():
+    dependency = use_context("other", read_only=True, shard_key=7)
+    generator = dependency()
+    await generator.__anext__()
+
+    context = RoutingContext.create()
+    assert context.hint == "other"
+    assert context.read_only is True
+    assert context.shard_key == 7
+
+    with pytest.raises(StopAsyncIteration):
+        await generator.__anext__()
+
+    context = RoutingContext.create()
+    assert context.hint is None
+    assert context.read_only is False
+    assert context.shard_key is None
+
+
+async def test_use_context_dependency_routes_statements():
+    primary = Database(MEMORY_URL)
+    other = Database(MEMORY_URL)
+    cluster = DatabaseCluster({"primary": primary, "other": other})
+
+    generator = use_context("other")()
+    await generator.__anext__()
+    try:
+        assert cluster.route() is other
+    finally:
+        await generator.aclose()
+    assert cluster.route() is primary
+
+
 def test_default_router_unknown_name_raises():
     router = DefaultRouter("missing")
     with pytest.raises(RoutingError, match="missing"):
@@ -159,7 +193,7 @@ def test_cluster_requires_valid_default():
 def test_cluster_rejects_mixed_dialects():
     a = Database(MEMORY_URL)
     b = Database(MEMORY_URL)
-    b.__dict__["dialect"] = "postgresql"
+    b.dialect = "postgresql"
     with pytest.raises(ValueError, match="dialect"):
         DatabaseCluster({"a": a, "b": b}, default="a")
 
@@ -209,6 +243,21 @@ async def test_cluster_execute_and_verify_connection():
     await cluster.verify_connection()
     result = await cluster.execute(sa.select(sa.literal(1)))
     assert result.scalar() == 1
+
+
+async def test_cluster_session_uses_routed_database_without_pinning():
+    a = Database(MEMORY_URL)
+    b = Database(MEMORY_URL)
+    cluster = DatabaseCluster({"a": a, "b": b}, default="a")
+
+    async with cluster.session() as session:
+        assert session.get_bind() is a.engine.sync_engine
+        assert (await session.execute(sa.select(sa.literal(1)))).scalar() == 1
+        # unlike session_context, a fresh session does not pin the database
+        assert cluster.route(RoutingContext.create(hint="b")) is b
+
+    async with cluster.session(RoutingContext.create(hint="b")) as session:
+        assert session.get_bind() is b.engine.sync_engine
 
 
 async def test_cluster_atomic():

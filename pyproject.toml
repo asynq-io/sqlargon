@@ -1,7 +1,7 @@
 [project]
 name = "sqlargon"
 version = "1.0.0b1"
-description = "SQLAlchemy utils for Postgres and Sqlite"
+description = "SQLAlchemy repository pattern and utilities"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
 authors = [{ name = "RaRhAeu", email = "rarha_eu@protonmail.com" }]

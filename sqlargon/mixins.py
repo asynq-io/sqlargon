@@ -7,7 +7,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 from uuid_utils.compat import uuid4, uuid7
 
 from .types import GUID, GenerateUUID, GenerateUUIDV7, Timestamp, now
-from .utils import utc_now
 
 
 class UUIDModelMixin:
@@ -34,7 +33,6 @@ class CreatedUpdatedMixin:
     created_at: Mapped[datetime] = mapped_column(
         Timestamp(),
         server_default=now(),
-        default=utc_now,
         nullable=False,
     )
 
@@ -42,7 +40,6 @@ class CreatedUpdatedMixin:
         Timestamp(),
         server_default=now(),
         onupdate=now(),
-        default=utc_now,
         nullable=False,
         server_onupdate=now(),
     )
@@ -60,3 +57,8 @@ class SoftDeleteMixin:
     @hybrid_property
     def not_deleted(self) -> bool:
         return not self.tombstone
+
+    @not_deleted.inplace.expression
+    @classmethod
+    def _not_deleted_expression(cls) -> sa.ColumnElement[bool]:
+        return sa.not_(cls.tombstone)

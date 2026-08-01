@@ -135,6 +135,38 @@ async def test_uow_using_returns_fresh_unit(db: Database, user_repository_class)
     assert rebound.users.db is other_db
 
 
+async def test_uow_repository_accessed_on_class_returns_repository_class(
+    user_repository_class,
+):
+    class TestUow(SQLAlchemyUnitOfWork):
+        users: user_repository_class
+
+    assert TestUow.users is user_repository_class
+
+
+async def test_uow_database_class_attribute_used(user_repository_class):
+    other_db = Database("sqlite+aiosqlite:///:memory:")
+
+    class TestUow(SQLAlchemyUnitOfWork):
+        database = other_db
+        users: user_repository_class
+
+    uow = TestUow()
+    assert uow.db is other_db
+    assert uow.users.db is other_db
+
+
+async def test_uow_using_db_wins_over_class_attribute(user_repository_class):
+    class_db = Database("sqlite+aiosqlite:///:memory:")
+    other_db = Database("sqlite+aiosqlite:///:memory:")
+
+    class TestUow(SQLAlchemyUnitOfWork):
+        database = class_db
+        users: user_repository_class
+
+    assert TestUow().using(db=other_db).db is other_db
+
+
 async def test_uow_unresolved_annotation():
     class TestUow(SQLAlchemyUnitOfWork):
         pass
