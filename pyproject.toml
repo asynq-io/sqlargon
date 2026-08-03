@@ -6,15 +6,16 @@ readme = "README.md"
 requires-python = ">=3.10,<4.0"
 authors = [{ name = "RaRhAeu", email = "rarha_eu@protonmail.com" }]
 dependencies = [
-    "pydantic>=2.0,<3",
-    "pydantic-settings>=2.1.0,<3",
     "sqlalchemy>2.0,<3",
     "alembic>=1.13.1,<2",
-    "uuid-utils>=0.16.0",
-    "orjson>=3.11.9",
+    "orjson>=3.11.9,<4",
+    "pydantic>=2.0,<3",
+    "pydantic-settings>=2.1.0,<3",
+    "uuid-utils>=0.16.0,<1",
 ]
 
 [project.optional-dependencies]
+fastapi = ["fastapi>=0.115,<1"]
 postgres = ["asyncpg<1.0"]
 sqlite = ["aiosqlite>=0.19.0,<1"]
 mysql = ["asyncmy>=0.2.11"]
@@ -31,7 +32,6 @@ dev = [
     { include-group = "docs" },
     "fastapi>=0.138.0",
     "greenlet",
-    "supabase>=2.31.0",
 ]
 
 test = [
@@ -40,6 +40,7 @@ test = [
     "pytest-sugar",
     "pytest-repeat",
     "pytest-asyncio",
+    "httpx>=0.28.1",
 ]
 
 lint = [
@@ -145,7 +146,7 @@ DEP002 = [
     "asyncmy",
     "opentelemetry-instrumentation-sqlalchemy",
 ]
-DEP003 = ["sqlargon", "typing_extensions", "pydantic_core"]
+DEP003 = ["sqlargon", "typing_extensions", "pydantic_core", "starlette"]
 
 [tool.pyright]
 venvPath = "."
