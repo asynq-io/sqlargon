@@ -128,6 +128,37 @@ async def test_read_only_database_rejects_write(user_model):
         await replica.execute(sa.insert(user_model).values(name="John"))
 
 
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "INSERT INTO t (x) VALUES (1)",
+        "  update t set x = 1",
+        "DELETE FROM t",
+        "DROP TABLE t",
+        "WITH ids AS (SELECT 1 AS x) INSERT INTO t SELECT x FROM ids",
+    ],
+)
+async def test_read_only_database_rejects_text_writes(statement):
+    replica = ReadOnlyDatabase(MEMORY_URL)
+    with pytest.raises(ReadOnlyError):
+        await replica.execute(sa.text(statement))
+
+
+async def test_read_only_database_allows_text_select():
+    replica = ReadOnlyDatabase(MEMORY_URL)
+    result = await replica.execute(
+        sa.text("WITH ids AS (SELECT 1 AS x) SELECT x FROM ids")
+    )
+    assert result.scalar() == 1
+
+
+def test_read_only_database_sets_postgresql_readonly_option():
+    pytest.importorskip("asyncpg")
+    replica = ReadOnlyDatabase("postgresql+asyncpg://localhost:5432/test")
+    options = replica.engine.sync_engine.get_execution_options()
+    assert options["postgresql_readonly"] is True
+
+
 async def test_dispose_disposes_replicas(replicated_db):
     await replicated_db.dispose()
 

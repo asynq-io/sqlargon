@@ -95,6 +95,22 @@ def test_query_builder_insert_on_conflict_unsupported(qb, do):
         qb.insert(t, {"a": 1}, on_conflict=on_conflict)
 
 
+def test_insert_on_conflict_guard_checks_conflicts_option():
+    t = sa.table("t", sa.column("a"))
+    on_conflict = OnConflict(do="ignore", options={"index_elements": {"a"}})
+
+    class ReturningOnly(QueryBuilder):
+        supported_options = Option.RETURNING
+
+    class ConflictsOnly(QueryBuilder):
+        supported_options = Option.CONFLICTS
+
+    # RETURNING support does not imply ON CONFLICT support
+    with pytest.raises(UnsupportedOption):
+        ReturningOnly()._insert(t, {"a": 1}, on_conflict)
+    assert ConflictsOnly()._insert(t, {"a": 1}, on_conflict) is not None
+
+
 def test_query_builder_update(qb):
     t = sa.table("t", sa.column("a"))
     query = qb.update(t, {"a": 1})

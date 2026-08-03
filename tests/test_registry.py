@@ -1,3 +1,6 @@
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 
 from sqlargon import (
@@ -43,6 +46,31 @@ def test_set_default_database_overrides():
     db = Database(MEMORY_URL)
     set_default_database(db)
     assert get_default_database() is db
+
+
+def test_set_default_database_returns_previous():
+    first = Database(MEMORY_URL)
+    second = Database(MEMORY_URL)
+    assert set_default_database(first) is None
+    assert set_default_database(second) is first
+    assert set_default_database(None) is second
+
+
+def test_get_default_database_builds_once_across_threads(monkeypatch):
+    calls = []
+    build = Database.from_env.__func__
+
+    def slow_build(cls, **kwargs):
+        calls.append(1)
+        time.sleep(0.05)
+        return build(cls, **kwargs)
+
+    monkeypatch.setattr(Database, "from_env", classmethod(slow_build))
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        databases = list(executor.map(lambda _: get_default_database(), range(4)))
+
+    assert calls == [1]
+    assert all(database is databases[0] for database in databases)
 
 
 async def test_repository_without_database_uses_default(db, user_model, user_data):

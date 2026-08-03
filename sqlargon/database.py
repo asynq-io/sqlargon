@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from asyncio import Lock
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from functools import wraps
-from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, overload
+from typing import TYPE_CHECKING, Any, TypeVar, overload
 
-from sqlalchemy import event, text
+from sqlalchemy import TextClause, event, make_url, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.sql.dml import UpdateBase
 from typing_extensions import ParamSpec, Self
@@ -40,6 +41,16 @@ class ReadOnlyError(RuntimeError):
     """Raised when a write statement is executed against a read replica."""
 
 
+class _NamedLock:
+    """A process-local lock with a count of tasks holding or awaiting it."""
+
+    __slots__ = ("lock", "refs")
+
+    def __init__(self) -> None:
+        self.lock = Lock()
+        self.refs = 0
+
+
 class BaseDatabase(ABC):
     """Shared interface of a single :class:`Database` and a
     :class:`~sqlargon.DatabaseCluster`.
@@ -54,7 +65,8 @@ class BaseDatabase(ABC):
     dialect: str
     query_builder: QueryBuilder
 
-    _locks: ClassVar[dict[str, Lock]] = {}
+    def __init__(self) -> None:
+        self._locks: dict[str, _NamedLock] = {}
 
     @abstractmethod
     def route(self, context: RoutingContext | None = None) -> Database:
@@ -107,13 +119,18 @@ class BaseDatabase(ABC):
             async with self.native_lock(name):
                 yield
         else:
-            self._locks.setdefault(name, Lock())
-            lock = self._locks[name]
+            # the entry is reference counted: removing it while another task
+            # still waits would let a third task create a fresh lock under
+            # the same name and enter concurrently
+            entry = self._locks.setdefault(name, _NamedLock())
+            entry.refs += 1
             try:
-                async with lock:
+                async with entry.lock:
                     yield
             finally:
-                self._locks.pop(name, None)
+                entry.refs -= 1
+                if entry.refs == 0:
+                    self._locks.pop(name, None)
 
     @asynccontextmanager
     async def native_lock(self, name: str) -> AsyncGenerator[None]:
@@ -201,6 +218,7 @@ class Database(BaseDatabase):
         enable_tracker: bool = False,
         **kwargs: Any,
     ) -> None:
+        super().__init__()
         self._lock = Lock()
         self.engine = create_async_engine(url, **kwargs)
         self.session_maker = async_sessionmaker(
@@ -265,14 +283,21 @@ class Database(BaseDatabase):
         if current_session is not None:
             self._lock.release()
             yield current_session
-        else:
+            return
+
+        released = False
+        try:
             async with self.session() as session:
                 token = self._current_session.set(session)
                 self._lock.release()
+                released = True
                 try:
                     yield session
                 finally:
                     self._current_session.reset(token)
+        finally:
+            if not released:
+                self._lock.release()
 
     async def verify_connection(self) -> None:
         async with self.session() as session:
@@ -302,10 +327,29 @@ class Database(BaseDatabase):
         return cls(**settings.to_kwargs() | kwargs)
 
 
+_TEXT_WRITE = re.compile(
+    r"^\s*(insert|update|delete|merge|replace|create|alter|drop|truncate|grant|revoke)\b",
+    re.IGNORECASE,
+)
+_TEXT_CTE_WRITE = re.compile(
+    r"^\s*with\b.*?\b(insert|update|delete|merge|replace)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
 class ReadOnlyDatabase(Database):
-    """A read replica that rejects any write statement at the engine level."""
+    """A read replica that rejects any write statement at the engine level.
+
+    Compiled DML and textual write statements are rejected client side; on
+    PostgreSQL the connection is additionally put into read-only transaction
+    mode so anything that slips through is rejected by the server.
+    """
 
     def __init__(self, url: str, **kwargs: Any) -> None:
+        if make_url(url).get_dialect().name == "postgresql":
+            execution_options = dict(kwargs.get("execution_options") or {})
+            execution_options.setdefault("postgresql_readonly", True)
+            kwargs["execution_options"] = execution_options
         super().__init__(url, **kwargs)
         event.listen(self.engine.sync_engine, "before_execute", self._reject_writes)
 
@@ -317,6 +361,13 @@ class ReadOnlyDatabase(Database):
         _params: Any,
         _execution_options: Any,
     ) -> None:
-        if isinstance(clauseelement, UpdateBase):
+        is_write = isinstance(clauseelement, UpdateBase) or (
+            isinstance(clauseelement, TextClause)
+            and (
+                _TEXT_WRITE.match(clauseelement.text) is not None
+                or _TEXT_CTE_WRITE.match(clauseelement.text) is not None
+            )
+        )
+        if is_write:
             msg = f"Cannot execute {type(clauseelement).__name__} on a read replica"
             raise ReadOnlyError(msg)

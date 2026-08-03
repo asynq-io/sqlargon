@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from typing import Annotated
 
 import httpx
 import pytest
@@ -164,6 +165,53 @@ async def test_middleware_verify_failure_fails_startup(own_db, monkeypatch):
     assert started == []
 
 
+async def test_middleware_disposes_when_startup_fails(own_db, monkeypatch):
+    disposed = []
+
+    async def dispose_engine():
+        disposed.append(True)
+
+    async def verify_connection():
+        msg = "unreachable"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(own_db, "dispose", dispose_engine)
+    monkeypatch.setattr(own_db, "verify_connection", verify_connection)
+
+    app = FastAPI()
+    app.add_middleware(DatabaseMiddleware, database=own_db)
+
+    with pytest.raises(RuntimeError, match="unreachable"):
+        await cycle_lifespan(app)
+
+    assert disposed
+    assert get_default_database() is not own_db
+
+
+async def test_middleware_disposes_when_app_startup_fails(own_db, monkeypatch):
+    disposed = []
+
+    async def dispose_engine():
+        disposed.append(True)
+
+    monkeypatch.setattr(own_db, "dispose", dispose_engine)
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        msg = "app failed to start"
+        raise RuntimeError(msg)
+        yield
+
+    app = FastAPI(lifespan=lifespan)
+    app.add_middleware(DatabaseMiddleware, database=own_db)
+
+    with pytest.raises(RuntimeError, match="app failed to start"):
+        await cycle_lifespan(app)
+
+    assert disposed
+    assert get_default_database() is not own_db
+
+
 async def test_middleware_falls_back_to_default_database(db, monkeypatch):
     verified = []
 
@@ -324,7 +372,9 @@ async def test_transaction_routes_to_hinted_database(client_factory):
 
     @app.get("/routed")
     async def routed(
-        session: AsyncSession = Depends(transaction("other", database=cluster)),
+        session: Annotated[
+            AsyncSession, Depends(transaction("other", database=cluster))
+        ],
     ):
         return {"routed": session.get_bind() is other.engine.sync_engine}
 

@@ -158,7 +158,7 @@ class SQLAlchemyRepository(Generic[Model]):
         hint: str | None = None,
         *,
         db: AnyDatabase | None = None,
-        read_only: bool = False,
+        read_only: bool | None = None,
         shard_key: Any | None = None,
     ) -> Self:
         """Return a copy of this repository with a routing preference baked in.
@@ -170,6 +170,9 @@ class SQLAlchemyRepository(Generic[Model]):
             await repo.using(read_only=True).count()
             await repo.using(shard_key=tenant_id).create(**values)
             await repo.using(db=other_database).all()
+
+        ``read_only=False`` explicitly forces the primary even when the
+        repository inherited ``read_only=True``; ``None`` keeps it.
         """
         clone = self.copy(self._query)
         clone.routing = self.routing.merge(
@@ -472,45 +475,26 @@ class SQLAlchemyRepository(Generic[Model]):
         await q.execute()
         return None
 
-    @overload
     async def bulk_update(
         self,
         values: MultipleValues,
         on_: set[str],
         *args: Any,
-        return_results: Literal[False] = ...,
-    ) -> None: ...
+    ) -> None:
+        """Update many rows in a single executemany statement.
 
-    @overload
-    async def bulk_update(
-        self,
-        values: MultipleValues,
-        on_: set[str],
-        *args: Any,
-        return_results: Literal[True],
-    ) -> Sequence[Model]: ...
-
-    async def bulk_update(
-        self,
-        values: MultipleValues,
-        on_: set[str],
-        *args: Any,
-        return_results: bool = False,
-    ) -> Sequence[Model] | None:
+        An executemany cannot return rows; use :meth:`update_many` when the
+        updated models are needed.
+        """
         where = [getattr(self.model, field) == bindparam(f"u_{field}") for field in on_]
         values = [
             {key if key not in on_ else f"u_{key}": value for key, value in row.items()}
             for row in values
         ]
-        query = self.qb.update(self.model, return_results=return_results).where(
-            *args, *where
-        )
+        query = self.qb.update(self.model).where(*args, *where)
         async with self.session() as session:
             connection = await session.connection()
-            results = await connection.execute(query, values)
-            if return_results:
-                return results.scalars().all()
-        return None
+            await connection.execute(query, values)
 
     async def count(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> int:
         query = self.qb.count(self.model, *args, **kwargs)

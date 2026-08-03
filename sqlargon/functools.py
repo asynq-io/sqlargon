@@ -7,8 +7,10 @@ from typing_extensions import ParamSpec
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+    from typing import Any
 
     from .cluster import AnyDatabase
+    from .routing import RoutingContext
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -17,6 +19,10 @@ R = TypeVar("R")
 class _HasDatabase(Protocol):
     @property
     def db(self) -> AnyDatabase: ...
+
+    def routing_context(
+        self, statement: Any = None, *, read_only: bool = False
+    ) -> RoutingContext: ...
 
 
 S = TypeVar("S", bound=_HasDatabase)
@@ -34,7 +40,7 @@ def atomic(
 
     @wraps(fn)
     async def wrapper(self: S, *args: P.args, **kwargs: P.kwargs) -> R:
-        async with self.db.session_context():
+        async with self.db.session_context(self.routing_context()):
             return await fn(self, *args, **kwargs)
 
     return wrapper

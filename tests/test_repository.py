@@ -156,6 +156,23 @@ async def test_bulk_update(user_repository):
     assert await user_repository.count(model.last_name.in_(("Connor", "Carter"))) == 2
 
 
+async def test_bulk_update_returns_none(user_repository):
+    await user_repository.insert(
+        [{"name": "John"}, {"name": "Vincent"}, {"name": "Andrew"}]
+    ).execute()
+    # an executemany cannot return rows, so bulk_update never does
+    result = await user_repository.bulk_update(
+        values=[
+            {"name": "John", "last_name": "Connor"},
+            {"name": "Vincent", "last_name": "Carter"},
+        ],
+        on_={"name"},
+    )
+    assert result is None
+    model = user_repository.model
+    assert await user_repository.count(model.last_name.in_(("Connor", "Carter"))) == 2
+
+
 async def test_update_one(user_repository, user_data):
     await user_repository.create(**user_data)
     model = user_repository.model
@@ -371,18 +388,6 @@ async def test_bulk_create_or_update_with_return(user_repository):
     users = [{"name": "Alice"}, {"name": "Bob"}]
     result = await user_repository.bulk_create_or_update(users, return_results=True)
     assert {user.name for user in result} == {"Alice", "Bob"}
-
-
-async def test_bulk_update_with_return(user_repository):
-    await user_repository.insert([{"name": "John"}, {"name": "Vincent"}]).execute()
-    result = await user_repository.bulk_update(
-        [{"name": "John", "last_name": "Connor"}], {"name"}, return_results=True
-    )
-    john = await user_repository.get(name="John")
-    assert john is not None
-    assert john.last_name == "Connor"
-    # bulk_update runs on a core connection, so RETURNING yields scalar ids.
-    assert list(result) == [john.id]
 
 
 async def test_get_chunk_for_update_applies_values(user_repository, user_model):

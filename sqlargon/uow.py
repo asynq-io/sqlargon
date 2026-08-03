@@ -9,13 +9,15 @@ from typing import TYPE_CHECKING, Any, ClassVar, get_type_hints
 from .cluster import AnyDatabase
 from .registry import get_default_database
 from .repository import SQLAlchemyRepository
-from .routing import RoutingContext, RoutingOptions
+from .routing import RoutingContext, RoutingError, RoutingOptions
 
 if TYPE_CHECKING:
     from types import TracebackType
 
     from sqlalchemy.ext.asyncio import AsyncSession
     from typing_extensions import Self
+
+    from .orm import Base
 
 
 class _RepositoryDescriptor:
@@ -84,7 +86,7 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
         hint: str | None = None,
         *,
         db: AnyDatabase | None = None,
-        read_only: bool = False,
+        read_only: bool | None = None,
         shard_key: Any | None = None,
     ) -> Self:
         """Return a fresh unit of work with a routing preference baked in.
@@ -116,18 +118,45 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
             raise ValueError(msg)
         return self._session
 
-    async def __aenter__(self) -> Self:
-        if self._session is not None:
-            msg = "Cannot open the same unit of work more than once"
-            raise ValueError(msg)
-        await self._stack.__aenter__()
-        context = RoutingContext.create(
+    @classmethod
+    def _repository_models(cls) -> list[type[Base]]:
+        """Models of the declared repositories, in declaration order."""
+        models: list[type[Base]] = []
+        for klass in cls.__mro__:
+            for attribute in vars(klass).values():
+                if isinstance(attribute, _RepositoryDescriptor):
+                    model = getattr(attribute.repository_cls, "model", None)
+                    if model is not None and model not in models:
+                        models.append(model)
+        return models
+
+    def _routing_context(self, model: type[Base] | None = None) -> RoutingContext:
+        return RoutingContext.create(
+            model=model,
             hint=self.routing.hint,
             read_only=self.routing.read_only,
             shard_key=self.routing.shard_key,
         )
+
+    async def __aenter__(self) -> Self:
+        if self._session is not None:
+            msg = "Cannot open the same unit of work more than once"
+            raise ValueError(msg)
+        models = self._repository_models()
+        contexts = [self._routing_context(model) for model in models] or [
+            self._routing_context()
+        ]
+        if len(contexts) > 1:
+            routed = {self.db.route(context) for context in contexts}
+            if len(routed) > 1:
+                msg = (
+                    "Repositories of this unit of work route to different "
+                    "databases; a unit of work cannot span databases"
+                )
+                raise RoutingError(msg)
+        await self._stack.__aenter__()
         self._session = await self._stack.enter_async_context(
-            self.db.session_context(context)
+            self.db.session_context(contexts[0])
         )
         return self
 

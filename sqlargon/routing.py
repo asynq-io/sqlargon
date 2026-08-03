@@ -100,14 +100,19 @@ class RoutingOptions:
         hint: str | None = None,
         *,
         db: Database | DatabaseCluster | None = None,
-        read_only: bool = False,
+        read_only: bool | None = None,
         shard_key: Any | None = None,
     ) -> RoutingOptions:
-        """Return a copy with the given preferences overriding unset ones."""
+        """Return a copy with the given preferences overriding unset ones.
+
+        ``read_only`` is tri-state: ``None`` keeps the inherited value, while
+        an explicit ``False`` overrides it, so a primary read can be forced
+        from within a ``read_only=True`` scope.
+        """
         return RoutingOptions(
             db=db if db is not None else self.db,
             hint=hint if hint is not None else self.hint,
-            read_only=read_only or self.read_only,
+            read_only=self.read_only if read_only is None else read_only,
             shard_key=shard_key if shard_key is not None else self.shard_key,
         )
 
@@ -154,7 +159,7 @@ class UsingContext:
         self,
         hint: str | None = None,
         *,
-        read_only: bool = False,
+        read_only: bool | None = None,
         shard_key: Any | None = None,
     ) -> None:
         self.hint = hint
@@ -193,7 +198,7 @@ class UsingContext:
 def using(
     hint: str | None = None,
     *,
-    read_only: bool = False,
+    read_only: bool | None = None,
     shard_key: Any | None = None,
 ) -> UsingContext:
     """Mark statements in the wrapped scope with a routing preference.
@@ -215,7 +220,7 @@ def using(
 def use_context(
     hint: str | None = None,
     *,
-    read_only: bool = False,
+    read_only: bool | None = None,
     shard_key: Any | None = None,
 ) -> Callable[[], AsyncIterator[None]]:
     """Build a dependency applying :func:`using` for the span of a request.
