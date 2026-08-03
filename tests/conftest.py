@@ -3,19 +3,21 @@ from uuid import uuid4
 import pytest
 import sqlalchemy as sa
 
-from sqlargon import Database, SQLAlchemyRepository
-from sqlargon.repository import OnConflict
+from sqlargon import Database, SQLAlchemyRepository, set_default_database
 from sqlargon.types import GUID, GenerateUUID
+from sqlargon.typing import OnConflictOptions
 
 
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session", autouse=True)
 def db():
     return Database.from_env()
+
+
+@pytest.fixture(autouse=True)
+def default_database(db: Database):
+    set_default_database(db)
+    yield db
+    set_default_database(None)
 
 
 @pytest.fixture(scope="session")
@@ -28,7 +30,7 @@ def user_model(db: Database):
         name = sa.Column(sa.Unicode(255))
         last_name = sa.Column(sa.Unicode(255), nullable=True)
 
-    yield User
+    return User
 
 
 @pytest.fixture
@@ -37,7 +39,7 @@ async def user_repository_class(user_model, db):
         default_order_by = user_model.name.desc()
 
         @property
-        def on_conflict(self) -> OnConflict:
+        def on_conflict(self) -> OnConflictOptions:
             return {
                 "set_": {"name"},
                 "index_elements": {"id"},
@@ -50,8 +52,8 @@ async def user_repository_class(user_model, db):
 
 
 @pytest.fixture
-async def user_repository(user_repository_class, db):
-    yield user_repository_class(db)
+async def user_repository(user_repository_class):
+    return user_repository_class()
 
 
 @pytest.fixture

@@ -1,20 +1,16 @@
-from __future__ import annotations
-
 from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import sqlalchemy as sa
-from sqlalchemy import FetchedValue
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, declarative_mixin
+from sqlalchemy.orm import Mapped, mapped_column
+from uuid_utils.compat import uuid4, uuid7
 
-from .types import GUID, GenerateUUID, Timestamp, now
-from .utils import utc_now
+from .types import GUID, GenerateUUID, GenerateUUIDV7, Timestamp, now
 
 
-@declarative_mixin
 class UUIDModelMixin:
-    id: Mapped[UUID] = sa.Column(
+    id: Mapped[UUID] = mapped_column(
         GUID(),
         primary_key=True,
         default=uuid4,
@@ -23,46 +19,46 @@ class UUIDModelMixin:
     )
 
 
-@declarative_mixin
-class CreatedUpdatedMixin:
-    created_at: Mapped[datetime] = sa.Column(
-        Timestamp(),
-        server_default=now(),
-        default=utc_now,
+class UUIDV7ModelMixin:
+    id: Mapped[UUID] = mapped_column(
+        GUID(),
+        primary_key=True,
+        default=uuid7,
+        server_default=GenerateUUIDV7(),
         nullable=False,
     )
-    updated_at: Mapped[datetime] = sa.Column(
+
+
+class CreatedUpdatedMixin:
+    created_at: Mapped[datetime] = mapped_column(
+        Timestamp(),
+        server_default=now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
         Timestamp(),
         server_default=now(),
         onupdate=now(),
-        default=utc_now,
         nullable=False,
-        server_onupdate=FetchedValue(),
+        server_onupdate=now(),
     )
 
     @hybrid_property
-    def is_new(self):
+    def is_new(self) -> bool:
         return self.created_at == self.updated_at
 
 
-@declarative_mixin
 class SoftDeleteMixin:
-    tombstone: Mapped[bool] = sa.Column(
+    tombstone: Mapped[bool] = mapped_column(
         sa.Boolean(), nullable=False, default=False, server_default=sa.sql.false()
     )
 
     @hybrid_property
-    def not_deleted(self):
+    def not_deleted(self) -> bool:
         return not self.tombstone
 
-    @not_deleted.expression  # type: ignore
-    def not_deleted(cls):
-        return cls.tombstone.is_(False)
-
-    @hybrid_property
-    def is_deleted(self):
-        return self.tombstone
-
-    @is_deleted.expression  # type: ignore
-    def is_deleted(cls):
-        return cls.tombstone.is_(True)
+    @not_deleted.inplace.expression
+    @classmethod
+    def _not_deleted_expression(cls) -> sa.ColumnElement[bool]:
+        return sa.not_(cls.tombstone)

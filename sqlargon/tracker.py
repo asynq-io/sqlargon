@@ -2,6 +2,7 @@ import traceback
 
 import sqlalchemy as sa
 from sqlalchemy import AdaptedConnection
+from sqlalchemy.event import listen
 from sqlalchemy.pool import ConnectionPoolEntry
 
 ConnDict = dict[AdaptedConnection, list[str]]
@@ -17,24 +18,24 @@ class ConnectionTracker:
         self.connects = 0
         self.closes = 0
 
-    def track_pool(self, pool: sa.pool.Pool):
-        sa.event.listen(pool, "connect", self.on_connect)
-        sa.event.listen(pool, "close", self.on_close)
-        sa.event.listen(pool, "close_detached", self.on_close_detached)
+    def track_pool(self, pool: sa.Engine) -> None:
+        listen(pool, "connect", self.on_connect)
+        listen(pool, "close", self.on_close)
+        listen(pool, "close_detached", self.on_close_detached)
 
     def on_connect(
         self,
         adapted_connection: AdaptedConnection,
-        connection_record: ConnectionPoolEntry,
-    ):
+        _connection_record: ConnectionPoolEntry,
+    ) -> None:
         self.open_connections[adapted_connection] = traceback.format_stack()
         self.connects += 1
 
     def on_close(
         self,
         adapted_connection: AdaptedConnection,
-        connection_record: ConnectionPoolEntry,
-    ):
+        _connection_record: ConnectionPoolEntry,
+    ) -> None:
         try:
             del self.open_connections[adapted_connection]
         except KeyError:
@@ -44,14 +45,14 @@ class ConnectionTracker:
     def on_close_detached(
         self,
         adapted_connection: AdaptedConnection,
-    ):
+    ) -> None:
         try:
             del self.open_connections[adapted_connection]
         except KeyError:
             self.left_field_closes[adapted_connection] = traceback.format_stack()
         self.closes += 1
 
-    def clear(self):
+    def clear(self) -> None:
         self.open_connections.clear()
         self.left_field_closes.clear()
         self.connects = 0
