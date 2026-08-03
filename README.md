@@ -14,7 +14,6 @@
 *SQLAlchemy repository pattern and utilities*
 
 ---
-Version: 1.0.0b1
 
 Documentation: https://asynq-io.github.io/sqlargon/
 
