@@ -389,8 +389,10 @@ class SQLAlchemyRepository(Generic[Model]):
 
     async def update_many(
         self, values: SingleValue, *args: _ColumnExpressionArgument[bool], **kwargs: Any
-    ) -> None:
-        await self.update(values).filter(*args, **kwargs).execute()
+    ) -> Sequence[Model]:
+        return (
+            await self.update(values, return_results=True).filter(*args, **kwargs).all()
+        )
 
     async def delete_many(
         self, *args: _ColumnExpressionArgument[bool], **kwargs: Any
