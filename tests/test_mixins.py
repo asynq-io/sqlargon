@@ -71,19 +71,30 @@ def test_uuid_mixin_id_column(model, version, server_default_type):
 
 
 @pytest.mark.parametrize("column_name", ["created_at", "updated_at"])
-def test_created_updated_columns_use_server_defaults(column_name):
+def test_created_updated_columns_have_client_and_server_defaults(column_name):
     column = _MixinModel.__table__.c[column_name]
     assert isinstance(column.type, Timestamp)
     assert not column.nullable
-    # timestamps are filled by the database, not client side
-    assert column.default is None
+    # filled client side when possible so values are known without a
+    # post-insert fetch; the server default covers raw SQL inserts
+    assert column.default.is_callable
     assert isinstance(column.server_default.arg, now)
 
 
-def test_updated_at_column_has_onupdate():
+def test_created_updated_client_defaults_share_one_timestamp_per_statement():
+    context = type("Context", (), {})()
+    created = _MixinModel.__table__.c.created_at.default.arg(context)
+    updated = _MixinModel.__table__.c.updated_at.default.arg(context)
+    assert created.tzinfo is timezone.utc
+    assert created == updated
+
+
+def test_updated_at_column_has_client_side_onupdate():
     column = _MixinModel.__table__.c.updated_at
-    assert isinstance(column.onupdate.arg, now)
-    assert isinstance(column.server_onupdate.arg, now)
+    # the client clock is the single source for ORM inserts and updates, so
+    # updated_at can never fall behind created_at under clock skew
+    assert column.onupdate.is_callable
+    assert column.server_onupdate is None
 
 
 def test_created_at_column_has_no_onupdate():
@@ -120,14 +131,26 @@ async def test_uuidv7_mixin_generates_uuid7_on_insert(db: Database):
 
 
 @pytest.mark.usefixtures("tables")
-async def test_created_updated_filled_by_server_default(repository):
+async def test_created_updated_filled_on_insert(repository):
     obj = await repository.create(name="john")
 
     assert obj.created_at.tzinfo == timezone.utc
     assert obj.updated_at.tzinfo == timezone.utc
-    # a single evaluation of now() per statement fills both columns
+    # updated_at copies created_at on insert, so fresh rows are "new"
     assert obj.created_at == obj.updated_at
     assert obj.is_new is True
+
+
+@pytest.mark.usefixtures("tables")
+async def test_created_updated_available_after_commit(db: Database):
+    async with db.session() as session:
+        obj = _MixinModel(name="john")
+        session.add(obj)
+
+    # values are generated client side, so no lazy load (and no
+    # MissingGreenlet) happens outside the session
+    assert obj.created_at == obj.updated_at
+    assert obj.created_at.tzinfo is timezone.utc
 
 
 @pytest.mark.usefixtures("tables")
@@ -232,3 +255,27 @@ async def test_not_deleted_as_sql_filter(repository):
     rows = await repository.list(_MixinModel.not_deleted)
 
     assert [row.name for row in rows] == ["alive"]
+
+
+@pytest.mark.usefixtures("tables")
+@pytest.mark.parametrize(("tombstone", "expected"), [(False, False), (True, True)])
+async def test_is_deleted_instance_level(repository, tombstone, expected):
+    obj = await repository.create(name="john", tombstone=tombstone)
+
+    assert obj.is_deleted is expected
+
+
+def test_is_deleted_sql_expression():
+    assert (
+        str(_MixinModel.is_deleted.expression) == "test_mixins_model.tombstone IS true"
+    )
+
+
+@pytest.mark.usefixtures("tables")
+async def test_is_deleted_as_sql_filter(repository):
+    await repository.create(name="alive")
+    await repository.create(name="deleted", tombstone=True)
+
+    rows = await repository.list(_MixinModel.is_deleted)
+
+    assert [row.name for row in rows] == ["deleted"]

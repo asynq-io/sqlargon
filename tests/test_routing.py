@@ -4,22 +4,32 @@ import pytest
 import sqlalchemy as sa
 
 from sqlargon import (
+    Base,
     Database,
     DatabaseCluster,
     DefaultRouter,
     ModelRouter,
     RoutingContext,
     RoutingError,
+    RoutingOptions,
     ShardRouter,
     SQLAlchemyRepository,
     SQLAlchemyUnitOfWork,
+    atomic,
     use_context,
     using,
 )
-
-MEMORY_URL = "sqlite+aiosqlite:///:memory:"
+from sqlargon.types import GUID, GenerateUUID
+from tests import MEMORY_URL
 
 table = sa.table("t", sa.column("x"))
+
+
+class RoutedItem(Base):
+    __tablename__ = "test_routing_item"
+    id = sa.Column(
+        GUID(), primary_key=True, server_default=GenerateUUID(), nullable=False
+    )
 
 
 @pytest.mark.parametrize(
@@ -56,6 +66,21 @@ def test_using_context_manager_sets_and_resets_markers():
 def test_using_nested_inner_wins():
     with using("outer"), using("inner"):
         assert RoutingContext.create().hint == "inner"
+
+
+def test_merge_read_only_is_tri_state():
+    options = RoutingOptions(read_only=True)
+    assert options.merge().read_only is True
+    assert options.merge(read_only=False).read_only is False
+    assert RoutingOptions().merge(read_only=True).read_only is True
+
+
+def test_using_nested_read_only_false_forces_primary():
+    with using(read_only=True):
+        assert RoutingContext.create().read_only is True
+        with using(read_only=False):
+            assert RoutingContext.create().read_only is False
+        assert RoutingContext.create().read_only is True
 
 
 def test_explicit_arguments_win_over_using():
@@ -362,6 +387,76 @@ async def test_uow_shard_key_pins_shard(user_model, user_data):
         await cluster.dispose()
 
 
+async def test_atomic_preserves_repository_routing(user_model, user_data):
+    primary = Database(MEMORY_URL)
+    other = Database(MEMORY_URL)
+    cluster = DatabaseCluster({"primary": primary, "other": other})
+
+    class Repository(SQLAlchemyRepository[user_model]):
+        @atomic
+        async def add_user(self, **values):
+            return await self.create(**values)
+
+    await cluster.create_all()
+    try:
+        await Repository().using("other", db=cluster).add_user(**user_data)
+        assert await Repository().using(db=other).count() == 1
+        assert await Repository().using(db=primary).count() == 0
+    finally:
+        await cluster.dispose()
+
+
+async def test_model_router_routes_uow_statements(user_model, user_data):
+    main = Database(MEMORY_URL)
+    audit = Database(MEMORY_URL)
+    cluster = DatabaseCluster(
+        {"main": main, "audit": audit},
+        router=ModelRouter({user_model: "audit"}, default="main"),
+        default="main",
+    )
+
+    class Repository(SQLAlchemyRepository[user_model]):
+        pass
+
+    class Uow(SQLAlchemyUnitOfWork):
+        users: Repository
+
+    await cluster.create_all()
+    try:
+        async with Uow().using(db=cluster) as uow:
+            user = await uow.users.create(**user_data)
+            assert user is not None
+        assert await Repository().using(db=audit).count() == 1
+        assert await Repository().using(db=main).count() == 0
+    finally:
+        await cluster.dispose()
+
+
+async def test_uow_repositories_routing_to_different_databases_raises(user_model):
+    main = Database(MEMORY_URL)
+    audit = Database(MEMORY_URL)
+    cluster = DatabaseCluster(
+        {"main": main, "audit": audit},
+        router=ModelRouter({user_model: "audit"}, default="main"),
+        default="main",
+    )
+
+    class Users(SQLAlchemyRepository[user_model]):
+        pass
+
+    class Items(SQLAlchemyRepository[RoutedItem]):
+        pass
+
+    class Uow(SQLAlchemyUnitOfWork):
+        users: Users
+        items: Items
+
+    uow = Uow().using(db=cluster)
+    with pytest.raises(RoutingError, match="cannot span"):
+        async with uow:
+            pass  # pragma: no cover
+
+
 async def test_uow_hint_pins_database(user_model, user_data):
     primary = Database(MEMORY_URL)
     other = Database(MEMORY_URL)
@@ -381,3 +476,58 @@ async def test_uow_hint_pins_database(user_model, user_data):
         assert await Repository().using(db=primary).count() == 0
     finally:
         await cluster.dispose()
+
+
+def test_explicit_read_only_false_wins_over_ambient_scope():
+    with using(read_only=True):
+        assert RoutingContext.create().read_only is True
+        assert RoutingContext.create(read_only=False).read_only is False
+
+
+def test_repository_read_only_false_overrides_ambient_scope(user_model):
+    cluster = DatabaseCluster.with_replicas(MEMORY_URL, read_replicas=[MEMORY_URL])
+
+    class Repository(SQLAlchemyRepository[user_model]):
+        pass
+
+    repo = Repository().using(db=cluster)
+    with using(read_only=True):
+        assert cluster.route(repo.routing_context()) in cluster.replicas
+        forced = repo.using(read_only=False).routing_context()
+        assert cluster.route(forced) is cluster.default_database
+
+
+async def test_read_only_uow_enters_cluster_with_multiple_replicas(user_model):
+    cluster = DatabaseCluster.with_replicas(
+        MEMORY_URL,
+        read_replicas=[MEMORY_URL, MEMORY_URL],
+        replica_strategy="round_robin",
+    )
+
+    class Users(SQLAlchemyRepository[user_model]):
+        pass
+
+    class Items(SQLAlchemyRepository[RoutedItem]):
+        pass
+
+    class Uow(SQLAlchemyUnitOfWork):
+        users: Users
+        items: Items
+
+    # replicas are interchangeable: the cross-database check must not flag
+    # the round-robin strategy picking a different replica per repository
+    async with Uow().using(db=cluster, read_only=True) as uow:
+        assert uow.session is not None
+
+
+async def test_atomic_supports_objects_with_only_db_property():
+    database = Database(MEMORY_URL)
+
+    class Service:
+        db = database
+
+        @atomic
+        async def op(self) -> str:
+            return "done"
+
+    assert await Service().op() == "done"

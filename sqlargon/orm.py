@@ -26,7 +26,7 @@ class Base(DeclarativeBase):
     # https://docs.sqlalchemy.org/en/14/orm/extensions/asyncio.html#preventing-implicit-io-when-using-asyncsession
     metadata = MetaData(naming_convention=naming_convention)
 
-    __mapper_args__: Any = {"eager_defaults": False}  # noqa: RUF012
+    __mapper_args__: Any = {"eager_defaults": True}  # noqa: RUF012
 
     @declared_attr.directive
     def __tablename__(cls) -> str:

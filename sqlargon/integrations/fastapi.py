@@ -62,11 +62,19 @@ class DatabaseMiddleware:
         async def receive_hook() -> Message:
             message = await receive()
             if message["type"] == "lifespan.startup":
-                await self.startup()
+                try:
+                    await self.startup()
+                except BaseException:
+                    await self.shutdown()
+                    raise
             return message
 
         async def send_hook(message: Message) -> None:
-            if message["type"].startswith("lifespan.shutdown."):
+            if message["type"] in (
+                "lifespan.startup.failed",
+                "lifespan.shutdown.complete",
+                "lifespan.shutdown.failed",
+            ):
                 await self.shutdown()
             await send(message)
 
@@ -76,7 +84,7 @@ class DatabaseMiddleware:
 def transaction(
     hint: str | None = None,
     *,
-    read_only: bool = False,
+    read_only: bool | None = None,
     shard_key: Any | None = None,
     database: AnyDatabase | None = None,
 ) -> Callable[[], AsyncIterator[AsyncSession]]:

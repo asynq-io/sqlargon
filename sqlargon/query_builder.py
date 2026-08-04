@@ -65,7 +65,7 @@ class QueryBuilder:
         values: Values | None = None,
         on_conflict: OnConflict | None = None,
     ) -> sa.Insert:
-        if on_conflict and not self.supports(Option.RETURNING):
+        if on_conflict and not self.supports(Option.CONFLICTS):
             raise UnsupportedOption
         query = sa.insert(table)
         if values is not None:

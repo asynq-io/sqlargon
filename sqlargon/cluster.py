@@ -43,6 +43,7 @@ class DatabaseCluster(BaseDatabase):
         router: Router | None = None,
         default: str = "primary",
     ) -> None:
+        super().__init__()
         if not databases:
             msg = "A database cluster requires at least one database"
             raise ValueError(msg)
@@ -186,7 +187,7 @@ class DatabaseCluster(BaseDatabase):
         self,
         hint: str | None = None,
         *,
-        read_only: bool = False,
+        read_only: bool | None = None,
         shard_key: Any | None = None,
     ) -> UsingContext:
         """Return a :func:`~sqlargon.using` marker validated against this cluster."""

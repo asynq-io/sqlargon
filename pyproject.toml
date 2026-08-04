@@ -1,6 +1,6 @@
 [project]
 name = "sqlargon"
-version = "1.0.1b1"
+version = "1.0.2b1"
 description = "SQLAlchemy repository pattern and utilities"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"

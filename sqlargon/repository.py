@@ -158,7 +158,7 @@ class SQLAlchemyRepository(Generic[Model]):
         hint: str | None = None,
         *,
         db: AnyDatabase | None = None,
-        read_only: bool = False,
+        read_only: bool | None = None,
         shard_key: Any | None = None,
     ) -> Self:
         """Return a copy of this repository with a routing preference baked in.
@@ -170,6 +170,9 @@ class SQLAlchemyRepository(Generic[Model]):
             await repo.using(read_only=True).count()
             await repo.using(shard_key=tenant_id).create(**values)
             await repo.using(db=other_database).all()
+
+        ``read_only=False`` explicitly forces the primary even when the
+        repository inherited ``read_only=True``; ``None`` keeps it.
         """
         clone = self.copy(self._query)
         clone.routing = self.routing.merge(
@@ -249,19 +252,15 @@ class SQLAlchemyRepository(Generic[Model]):
         return self.copy(query)
 
     def routing_context(
-        self, statement: Any = None, *, read_only: bool = False
+        self, statement: Any = None, *, read_only: bool | None = None
     ) -> RoutingContext:
-        return RoutingContext.create(
-            statement=statement,
-            model=getattr(type(self), "model", None),
-            read_only=read_only or self.routing.read_only,
-            hint=self.routing.hint,
-            shard_key=self.routing.shard_key,
+        return self.routing.context(
+            statement, getattr(type(self), "model", None), read_only=read_only
         )
 
     @asynccontextmanager
     async def session(
-        self, statement: Any = None, *, read_only: bool = False
+        self, statement: Any = None, *, read_only: bool | None = None
     ) -> AsyncGenerator[AsyncSession]:
         context = self.routing_context(statement, read_only=read_only)
         async with self.db.session_context(context) as session:
@@ -272,14 +271,18 @@ class SQLAlchemyRepository(Generic[Model]):
         query: Executable | TypedReturnsRows,
         params: Params | None = None,
         *,
-        read_only: bool = False,
+        read_only: bool | None = None,
         **kwargs: Any,
     ) -> Result:
         async with self.session(query, read_only=read_only) as session:
             return await session.execute(query, params, **kwargs)
 
     async def execute(
-        self, params: Params | None = None, *, read_only: bool = False, **kwargs: Any
+        self,
+        params: Params | None = None,
+        *,
+        read_only: bool | None = None,
+        **kwargs: Any,
     ) -> Result:
         return await self.execute_query(
             self.query, params, read_only=read_only, **kwargs
@@ -297,7 +300,7 @@ class SQLAlchemyRepository(Generic[Model]):
         query: Executable | TypedReturnsRows,
         params: Params | None = None,
         *,
-        read_only: bool = False,
+        read_only: bool | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[Row[Any]]:
         async with self.session(query, read_only=read_only) as session:
@@ -306,7 +309,11 @@ class SQLAlchemyRepository(Generic[Model]):
                 yield row
 
     def stream(
-        self, params: Params | None = None, *, read_only: bool = False, **kwargs: Any
+        self,
+        params: Params | None = None,
+        *,
+        read_only: bool | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator[Row[Any]]:
         return self.stream_query(self.query, params, read_only=read_only, **kwargs)
 
@@ -396,8 +403,8 @@ class SQLAlchemyRepository(Generic[Model]):
 
     async def delete_many(
         self, *args: _ColumnExpressionArgument[bool], **kwargs: Any
-    ) -> Sequence[Model]:
-        return await self.delete(return_results=True).filter(*args, **kwargs).all()
+    ) -> None:
+        await self.delete(return_results=False).filter(*args, **kwargs).execute()
 
     async def list(
         self, *args: _ColumnExpressionArgument[bool], **kwargs: Any
@@ -472,45 +479,31 @@ class SQLAlchemyRepository(Generic[Model]):
         await q.execute()
         return None
 
-    @overload
-    async def bulk_update(
-        self,
-        values: MultipleValues,
-        on_: set[str],
-        *args: Any,
-        return_results: Literal[False] = ...,
-    ) -> None: ...
-
-    @overload
-    async def bulk_update(
-        self,
-        values: MultipleValues,
-        on_: set[str],
-        *args: Any,
-        return_results: Literal[True],
-    ) -> Sequence[Model]: ...
+    async def create_many(self, items: MultipleValues) -> Sequence[Model]:
+        return await self.bulk_create(
+            items, return_results=True, ignore_conflicts=False
+        )
 
     async def bulk_update(
         self,
         values: MultipleValues,
         on_: set[str],
         *args: Any,
-        return_results: bool = False,
-    ) -> Sequence[Model] | None:
+    ) -> None:
+        """Update many rows in a single executemany statement.
+
+        An executemany cannot return rows; use :meth:`update_many` when the
+        updated models are needed.
+        """
         where = [getattr(self.model, field) == bindparam(f"u_{field}") for field in on_]
         values = [
             {key if key not in on_ else f"u_{key}": value for key, value in row.items()}
             for row in values
         ]
-        query = self.qb.update(self.model, return_results=return_results).where(
-            *args, *where
-        )
+        query = self.qb.update(self.model).where(*args, *where)
         async with self.session() as session:
             connection = await session.connection()
-            results = await connection.execute(query, values)
-            if return_results:
-                return results.scalars().all()
-        return None
+            await connection.execute(query, values)
 
     async def count(self, *args: _ColumnExpressionArgument[bool], **kwargs: Any) -> int:
         query = self.qb.count(self.model, *args, **kwargs)

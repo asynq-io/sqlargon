@@ -11,8 +11,7 @@ from sqlargon import (
     SQLAlchemyRepository,
     read_only,
 )
-
-MEMORY_URL = "sqlite+aiosqlite:///:memory:"
+from tests import MEMORY_URL
 
 
 def select_context() -> RoutingContext:
@@ -128,6 +127,37 @@ async def test_read_only_database_rejects_write(user_model):
         await replica.execute(sa.insert(user_model).values(name="John"))
 
 
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "INSERT INTO t (x) VALUES (1)",
+        "  update t set x = 1",
+        "DELETE FROM t",
+        "DROP TABLE t",
+        "WITH ids AS (SELECT 1 AS x) INSERT INTO t SELECT x FROM ids",
+    ],
+)
+async def test_read_only_database_rejects_text_writes(statement):
+    replica = ReadOnlyDatabase(MEMORY_URL)
+    with pytest.raises(ReadOnlyError):
+        await replica.execute(sa.text(statement))
+
+
+async def test_read_only_database_allows_text_select():
+    replica = ReadOnlyDatabase(MEMORY_URL)
+    result = await replica.execute(
+        sa.text("WITH ids AS (SELECT 1 AS x) SELECT x FROM ids")
+    )
+    assert result.scalar() == 1
+
+
+def test_read_only_database_sets_postgresql_readonly_option():
+    pytest.importorskip("asyncpg")
+    replica = ReadOnlyDatabase("postgresql+asyncpg://localhost:5432/test")
+    options = replica.engine.sync_engine.get_execution_options()
+    assert options["postgresql_readonly"] is True
+
+
 async def test_dispose_disposes_replicas(replicated_db):
     await replicated_db.dispose()
 
@@ -149,3 +179,35 @@ async def test_repository_reads_route_through_replica(tmp_path, user_model, user
     finally:
         await cluster.drop_all()
         await cluster.dispose()
+
+
+async def test_read_only_database_allows_cte_with_write_verb_in_literal():
+    replica = ReadOnlyDatabase(MEMORY_URL)
+    result = await replica.execute(
+        sa.text(
+            "WITH recent AS (SELECT 'delete' AS action) "
+            "SELECT count(*) FROM recent WHERE action = 'delete'"
+        )
+    )
+    assert result.scalar() == 1
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "-- audit\nINSERT INTO t (x) VALUES (1)",
+        "/* hint */ UPDATE t SET x = 1",
+        "SELECT 1; DELETE FROM t",
+        "CALL write_proc()",
+    ],
+)
+async def test_read_only_database_rejects_obfuscated_text_writes(statement):
+    replica = ReadOnlyDatabase(MEMORY_URL)
+    with pytest.raises(ReadOnlyError):
+        await replica.execute(sa.text(statement))
+
+
+async def test_read_only_sqlite_connection_is_query_only():
+    replica = ReadOnlyDatabase(MEMORY_URL)
+    result = await replica.execute(sa.text("PRAGMA query_only"))
+    assert result.scalar() == 1

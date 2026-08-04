@@ -2,14 +2,17 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from contextlib import AbstractAsyncContextManager, AsyncExitStack
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, ClassVar, get_type_hints
 
-# AnyDatabase is imported at runtime: subclass creation resolves the
-# ``database`` annotation via ``get_type_hints`` in this module's namespace.
+# AnyDatabase and Base are imported at runtime: subclass creation resolves
+# the ``database`` and ``_repository_models`` annotations via
+# ``get_type_hints`` in this module's namespace.
 from .cluster import AnyDatabase
+from .orm import Base
 from .registry import get_default_database
 from .repository import SQLAlchemyRepository
-from .routing import RoutingContext, RoutingOptions
+from .routing import RoutingContext, RoutingError, RoutingOptions
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -62,17 +65,20 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
     """
 
     database: ClassVar[AnyDatabase | None] = None
+    _repository_models: ClassVar[list[type[Base]]] = []
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        hints = get_type_hints(cls)
-        for name, hint in hints.items():
-            if (
-                isinstance(hint, type)
-                and issubclass(hint, SQLAlchemyRepository)
-                and not isinstance(cls.__dict__.get(name), _RepositoryDescriptor)
-            ):
+        models: list[type[Base]] = []
+        for name, hint in get_type_hints(cls).items():
+            if not (isinstance(hint, type) and issubclass(hint, SQLAlchemyRepository)):
+                continue
+            if not isinstance(cls.__dict__.get(name), _RepositoryDescriptor):
                 setattr(cls, name, _RepositoryDescriptor(hint))
+            model = getattr(hint, "model", None)
+            if model is not None and model not in models:
+                models.append(model)
+        cls._repository_models = models
 
     def __init__(self) -> None:
         self._stack = AsyncExitStack()
@@ -84,7 +90,7 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
         hint: str | None = None,
         *,
         db: AnyDatabase | None = None,
-        read_only: bool = False,
+        read_only: bool | None = None,
         shard_key: Any | None = None,
     ) -> Self:
         """Return a fresh unit of work with a routing preference baked in.
@@ -116,18 +122,34 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
             raise ValueError(msg)
         return self._session
 
+    def _routing_context(self, model: type[Base] | None = None) -> RoutingContext:
+        return self.routing.context(model=model)
+
+    def _model_home_probe(self, model: type[Base]) -> RoutingContext:
+        # read-intent with no statement and no read_only flag: model and
+        # shard routers reveal the model's home database, while replica
+        # routers answer with the primary -- deterministically and without
+        # picking replicas or setting their sticky-read flag
+        return replace(self._routing_context(model), operation="read", read_only=False)
+
     async def __aenter__(self) -> Self:
         if self._session is not None:
             msg = "Cannot open the same unit of work more than once"
             raise ValueError(msg)
+        models = self._repository_models
+        if len(models) > 1:
+            routed = {self.db.route(self._model_home_probe(model)) for model in models}
+            if len(routed) > 1:
+                msg = (
+                    "Repositories of this unit of work route to different "
+                    "databases; a unit of work cannot span databases"
+                )
+                raise RoutingError(msg)
         await self._stack.__aenter__()
-        context = RoutingContext.create(
-            hint=self.routing.hint,
-            read_only=self.routing.read_only,
-            shard_key=self.routing.shard_key,
-        )
         self._session = await self._stack.enter_async_context(
-            self.db.session_context(context)
+            self.db.session_context(
+                self._routing_context(models[0] if models else None)
+            )
         )
         return self
 

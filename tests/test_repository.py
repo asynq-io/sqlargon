@@ -8,6 +8,7 @@ from sqlalchemy.orm import aliased, relationship
 
 from sqlargon import Base, Database, SQLAlchemyRepository
 from sqlargon.functools import atomic
+from tests import MEMORY_URL
 
 
 # Declared at module level: pytest-repeat re-runs every test, and a model
@@ -156,6 +157,23 @@ async def test_bulk_update(user_repository):
     assert await user_repository.count(model.last_name.in_(("Connor", "Carter"))) == 2
 
 
+async def test_bulk_update_returns_none(user_repository):
+    await user_repository.insert(
+        [{"name": "John"}, {"name": "Vincent"}, {"name": "Andrew"}]
+    ).execute()
+    # an executemany cannot return rows, so bulk_update never does
+    result = await user_repository.bulk_update(
+        values=[
+            {"name": "John", "last_name": "Connor"},
+            {"name": "Vincent", "last_name": "Carter"},
+        ],
+        on_={"name"},
+    )
+    assert result is None
+    model = user_repository.model
+    assert await user_repository.count(model.last_name.in_(("Connor", "Carter"))) == 2
+
+
 async def test_update_one(user_repository, user_data):
     await user_repository.create(**user_data)
     model = user_repository.model
@@ -177,9 +195,15 @@ async def test_delete_one(user_repository, user_data):
 
 async def test_delete_many(user_repository):
     await user_repository.insert([{"name": "Alice"}, {"name": "Bob"}]).execute()
-    deleted = await user_repository.delete_many()
-    assert len(deleted) == 2
+    result = await user_repository.delete_many()
+    assert result is None
     assert await user_repository.count() == 0
+
+
+async def test_create_many(user_repository):
+    rows = await user_repository.create_many([{"name": "Alice"}, {"name": "Bob"}])
+    assert [row.name for row in rows] == ["Alice", "Bob"]
+    assert await user_repository.count() == 2
 
 
 async def test_remove(user_repository, user_data):
@@ -299,7 +323,7 @@ async def test_init_subclass_invalid_model():
 
 
 async def test_repository_database_binding(user_repository_class):
-    other_db = Database("sqlite+aiosqlite:///:memory:")
+    other_db = Database(MEMORY_URL)
 
     repo = user_repository_class().using(db=other_db)
     assert repo.db is other_db
@@ -309,7 +333,7 @@ async def test_repository_database_binding(user_repository_class):
 async def test_repository_database_binding_preserved_across_chaining(
     user_repository_class,
 ):
-    other_db = Database("sqlite+aiosqlite:///:memory:")
+    other_db = Database(MEMORY_URL)
 
     repo = user_repository_class().using(db=other_db)
     assert repo.filter(name="John").db is other_db
@@ -371,18 +395,6 @@ async def test_bulk_create_or_update_with_return(user_repository):
     users = [{"name": "Alice"}, {"name": "Bob"}]
     result = await user_repository.bulk_create_or_update(users, return_results=True)
     assert {user.name for user in result} == {"Alice", "Bob"}
-
-
-async def test_bulk_update_with_return(user_repository):
-    await user_repository.insert([{"name": "John"}, {"name": "Vincent"}]).execute()
-    result = await user_repository.bulk_update(
-        [{"name": "John", "last_name": "Connor"}], {"name"}, return_results=True
-    )
-    john = await user_repository.get(name="John")
-    assert john is not None
-    assert john.last_name == "Connor"
-    # bulk_update runs on a core connection, so RETURNING yields scalar ids.
-    assert list(result) == [john.id]
 
 
 async def test_get_chunk_for_update_applies_values(user_repository, user_model):

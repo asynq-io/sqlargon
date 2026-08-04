@@ -1,5 +1,7 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
+from weakref import WeakKeyDictionary
 
 import sqlalchemy as sa
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -7,6 +9,25 @@ from sqlalchemy.orm import Mapped, mapped_column
 from uuid_utils.compat import uuid4, uuid7
 
 from .types import GUID, GenerateUUID, GenerateUUIDV7, Timestamp, now
+from .utils import utc_now
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine.default import DefaultExecutionContext
+
+_statement_timestamps: WeakKeyDictionary[object, datetime] = WeakKeyDictionary()
+
+
+def _statement_utc_now(context: "DefaultExecutionContext") -> datetime:
+    """One shared timestamp per statement, mirroring server-side ``now()``.
+
+    ``created_at`` and ``updated_at`` both use it as their client-side
+    default, so freshly inserted rows always satisfy ``is_new``.
+    """
+    try:
+        return _statement_timestamps[context]
+    except KeyError:
+        timestamp = _statement_timestamps[context] = utc_now()
+        return timestamp
 
 
 class UUIDModelMixin:
@@ -32,16 +53,20 @@ class UUIDV7ModelMixin:
 class CreatedUpdatedMixin:
     created_at: Mapped[datetime] = mapped_column(
         Timestamp(),
+        default=_statement_utc_now,
         server_default=now(),
         nullable=False,
     )
 
+    # onupdate uses the client clock like the insert defaults, so ORM rows
+    # never mix clock sources and ``updated_at >= created_at`` holds even
+    # under client/server clock skew
     updated_at: Mapped[datetime] = mapped_column(
         Timestamp(),
+        default=_statement_utc_now,
         server_default=now(),
-        onupdate=now(),
+        onupdate=utc_now,
         nullable=False,
-        server_onupdate=now(),
     )
 
     @hybrid_property
@@ -62,3 +87,12 @@ class SoftDeleteMixin:
     @classmethod
     def _not_deleted_expression(cls) -> sa.ColumnElement[bool]:
         return sa.not_(cls.tombstone)
+
+    @hybrid_property
+    def is_deleted(self) -> bool:
+        return self.tombstone
+
+    @is_deleted.inplace.expression
+    @classmethod
+    def _is_deleted_expression(cls) -> sa.ColumnElement[bool]:
+        return cls.tombstone.is_(sa.true())

@@ -1,8 +1,10 @@
 import os
 
+MEMORY_URL = "sqlite+aiosqlite:///:memory:"
+
 os.environ.update(
     {
         "ENV": "TEST",
-        "DATABASE_URL": "sqlite+aiosqlite:///:memory:",
+        "DATABASE_URL": MEMORY_URL,
     }
 )

@@ -28,7 +28,7 @@ class SupportsPagination(Protocol[ModelT]):
     def qb(self) -> QueryBuilder: ...
 
     def session(
-        self, statement: Any = None, *, read_only: bool = False
+        self, statement: Any = None, *, read_only: bool | None = None
     ) -> AbstractAsyncContextManager[AsyncSession]: ...
 
 
