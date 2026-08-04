@@ -479,10 +479,10 @@ class SQLAlchemyRepository(Generic[Model]):
         await q.execute()
         return None
 
-    async def create_many(
-        self, items: MultipleValues, **options: Any
-    ) -> Sequence[Model]:
-        return await self.bulk_create(items, return_results=True, **options)
+    async def create_many(self, items: MultipleValues) -> Sequence[Model]:
+        return await self.bulk_create(
+            items, return_results=True, ignore_conflicts=False
+        )
 
     async def bulk_update(
         self,
