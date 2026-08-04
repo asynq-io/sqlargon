@@ -52,18 +52,20 @@ class RoutingContext:
         statement: Any | None = None,
         model: type[Base] | None = None,
         *,
-        read_only: bool = False,
+        read_only: bool | None = None,
         hint: str | None = None,
         shard_key: Any | None = None,
     ) -> RoutingContext:
         """Build a context, merging explicit arguments with :func:`using` markers.
 
-        Explicit arguments win over ambient context variables. The operation
-        defaults to ``write`` for statements that cannot be proven read-only,
-        so unknown statements never leak onto a replica.
+        Explicit arguments win over ambient context variables: ``read_only``
+        is tri-state, so an explicit ``False`` overrides an ambient
+        ``using(read_only=True)`` scope while ``None`` inherits it. The
+        operation defaults to ``write`` for statements that cannot be proven
+        read-only, so unknown statements never leak onto a replica.
         """
         options = _routing_options.get()
-        forced = read_only or options.read_only
+        forced = bool(options.read_only if read_only is None else read_only)
         if forced or isinstance(statement, SelectBase):
             operation: Operation = "read"
         elif isinstance(statement, UpdateBase):
@@ -92,7 +94,7 @@ class RoutingOptions:
 
     db: Database | DatabaseCluster | None = None
     hint: str | None = None
-    read_only: bool = False
+    read_only: bool | None = None
     shard_key: Any | None = None
 
     def merge(
@@ -114,6 +116,22 @@ class RoutingOptions:
             hint=hint if hint is not None else self.hint,
             read_only=self.read_only if read_only is None else read_only,
             shard_key=shard_key if shard_key is not None else self.shard_key,
+        )
+
+    def context(
+        self,
+        statement: Any | None = None,
+        model: type[Base] | None = None,
+        *,
+        read_only: bool | None = None,
+    ) -> RoutingContext:
+        """Build the per-statement :class:`RoutingContext` for these options."""
+        return RoutingContext.create(
+            statement=statement,
+            model=model,
+            read_only=self.read_only if read_only is None else read_only,
+            hint=self.hint,
+            shard_key=self.shard_key,
         )
 
 

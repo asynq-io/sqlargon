@@ -11,8 +11,7 @@ from sqlargon import (
     get_default_database,
     set_default_database,
 )
-
-MEMORY_URL = "sqlite+aiosqlite:///:memory:"
+from tests import MEMORY_URL
 
 
 @pytest.fixture(autouse=True)

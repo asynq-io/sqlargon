@@ -58,13 +58,15 @@ class CreatedUpdatedMixin:
         nullable=False,
     )
 
+    # onupdate uses the client clock like the insert defaults, so ORM rows
+    # never mix clock sources and ``updated_at >= created_at`` holds even
+    # under client/server clock skew
     updated_at: Mapped[datetime] = mapped_column(
         Timestamp(),
         default=_statement_utc_now,
         server_default=now(),
-        onupdate=now(),
+        onupdate=utc_now,
         nullable=False,
-        server_onupdate=now(),
     )
 
     @hybrid_property

@@ -10,8 +10,7 @@ from sqlargon.query_builder import Option, QueryBuilder
 from sqlargon.routing import RoutingContext
 from sqlargon.settings import DatabaseSettings
 from sqlargon.utils import utc_now
-
-MEMORY_URL = "sqlite+aiosqlite:///:memory:"
+from tests import MEMORY_URL
 
 
 class LockingQueryBuilder(QueryBuilder):
@@ -102,7 +101,7 @@ def test_from_env():
 
 
 def test_from_settings():
-    settings = DatabaseSettings(url="sqlite+aiosqlite:///:memory:")
+    settings = DatabaseSettings(url=MEMORY_URL)
     db = Database(**settings.to_kwargs())
     assert isinstance(db, Database)
     assert db.dialect == "sqlite"
@@ -174,7 +173,7 @@ async def test_lock_serializes_tasks_under_one_name(db: Database):
     ]
 
 
-async def test_session_context_releases_lock_when_session_creation_fails(
+async def test_session_context_recovers_when_session_creation_fails(
     db: Database, monkeypatch
 ):
     def broken_session_maker():
@@ -185,7 +184,11 @@ async def test_session_context_releases_lock_when_session_creation_fails(
     with pytest.raises(RuntimeError, match="boom"):
         async with db.session_context():
             pass  # pragma: no cover
-    assert not db._lock.locked()
+    assert db._current_session.get() is None
+
+    monkeypatch.undo()
+    async with db.session_context() as session:
+        assert session is not None
 
 
 @pytest.mark.usefixtures("locking_query_builder")

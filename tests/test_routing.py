@@ -20,8 +20,7 @@ from sqlargon import (
     using,
 )
 from sqlargon.types import GUID, GenerateUUID
-
-MEMORY_URL = "sqlite+aiosqlite:///:memory:"
+from tests import MEMORY_URL
 
 table = sa.table("t", sa.column("x"))
 
@@ -477,3 +476,58 @@ async def test_uow_hint_pins_database(user_model, user_data):
         assert await Repository().using(db=primary).count() == 0
     finally:
         await cluster.dispose()
+
+
+def test_explicit_read_only_false_wins_over_ambient_scope():
+    with using(read_only=True):
+        assert RoutingContext.create().read_only is True
+        assert RoutingContext.create(read_only=False).read_only is False
+
+
+def test_repository_read_only_false_overrides_ambient_scope(user_model):
+    cluster = DatabaseCluster.with_replicas(MEMORY_URL, read_replicas=[MEMORY_URL])
+
+    class Repository(SQLAlchemyRepository[user_model]):
+        pass
+
+    repo = Repository().using(db=cluster)
+    with using(read_only=True):
+        assert cluster.route(repo.routing_context()) in cluster.replicas
+        forced = repo.using(read_only=False).routing_context()
+        assert cluster.route(forced) is cluster.default_database
+
+
+async def test_read_only_uow_enters_cluster_with_multiple_replicas(user_model):
+    cluster = DatabaseCluster.with_replicas(
+        MEMORY_URL,
+        read_replicas=[MEMORY_URL, MEMORY_URL],
+        replica_strategy="round_robin",
+    )
+
+    class Users(SQLAlchemyRepository[user_model]):
+        pass
+
+    class Items(SQLAlchemyRepository[RoutedItem]):
+        pass
+
+    class Uow(SQLAlchemyUnitOfWork):
+        users: Users
+        items: Items
+
+    # replicas are interchangeable: the cross-database check must not flag
+    # the round-robin strategy picking a different replica per repository
+    async with Uow().using(db=cluster, read_only=True) as uow:
+        assert uow.session is not None
+
+
+async def test_atomic_supports_objects_with_only_db_property():
+    database = Database(MEMORY_URL)
+
+    class Service:
+        db = database
+
+        @atomic
+        async def op(self) -> str:
+            return "done"
+
+    assert await Service().op() == "done"

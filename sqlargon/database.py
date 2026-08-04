@@ -219,7 +219,6 @@ class Database(BaseDatabase):
         **kwargs: Any,
     ) -> None:
         super().__init__()
-        self._lock = Lock()
         self.engine = create_async_engine(url, **kwargs)
         self.session_maker = async_sessionmaker(
             bind=self.engine, expire_on_commit=False
@@ -276,28 +275,22 @@ class Database(BaseDatabase):
         ``context`` is accepted for interface parity with
         :class:`~sqlargon.DatabaseCluster` and ignored -- there is only one
         database to route to.
-        """
-        await self._lock.acquire()
-        current_session = self._current_session.get()
 
+        The current session lives in a :class:`~contextvars.ContextVar`, so
+        it is task-local by construction; no lock is needed around the
+        get-or-open below.
+        """
+        current_session = self._current_session.get()
         if current_session is not None:
-            self._lock.release()
             yield current_session
             return
 
-        released = False
-        try:
-            async with self.session() as session:
-                token = self._current_session.set(session)
-                self._lock.release()
-                released = True
-                try:
-                    yield session
-                finally:
-                    self._current_session.reset(token)
-        finally:
-            if not released:
-                self._lock.release()
+        async with self.session() as session:
+            token = self._current_session.set(session)
+            try:
+                yield session
+            finally:
+                self._current_session.reset(token)
 
     async def verify_connection(self) -> None:
         async with self.session() as session:
@@ -327,8 +320,20 @@ class Database(BaseDatabase):
         return cls(**settings.to_kwargs() | kwargs)
 
 
+# comments, string literals and quoted identifiers: stripped before
+# classification so write verbs inside them neither hide a write statement
+# nor flag a read one
+_SQL_NOISE = re.compile(
+    r"--[^\n]*"
+    r"|/\*.*?\*/"
+    r"|'(?:[^']|'')*'"
+    r'|"(?:[^"]|"")*"'
+    r"|`[^`]*`",
+    re.DOTALL,
+)
 _TEXT_WRITE = re.compile(
-    r"^\s*(insert|update|delete|merge|replace|create|alter|drop|truncate|grant|revoke)\b",
+    r"^\s*(insert|update|delete|merge|replace|create|alter|drop|truncate"
+    r"|grant|revoke|call|do|copy|load|lock|vacuum|refresh|reindex)\b",
     re.IGNORECASE,
 )
 _TEXT_CTE_WRITE = re.compile(
@@ -337,12 +342,32 @@ _TEXT_CTE_WRITE = re.compile(
 )
 
 
+def _is_text_write(statement: str) -> bool:
+    """Best-effort client-side classification of a textual statement."""
+    stripped = _SQL_NOISE.sub(" ", statement)
+    return any(
+        _TEXT_WRITE.match(part) is not None or _TEXT_CTE_WRITE.match(part) is not None
+        for part in stripped.split(";")
+    )
+
+
+# session-level read-only modes for dialects without an engine-wide
+# execution option; set on every new connection of a ReadOnlyDatabase
+_READ_ONLY_SESSION_STATEMENTS = {
+    "sqlite": "PRAGMA query_only = 1",
+    "mysql": "SET SESSION TRANSACTION READ ONLY",
+    "mariadb": "SET SESSION TRANSACTION READ ONLY",
+}
+
+
 class ReadOnlyDatabase(Database):
     """A read replica that rejects any write statement at the engine level.
 
-    Compiled DML and textual write statements are rejected client side; on
-    PostgreSQL the connection is additionally put into read-only transaction
-    mode so anything that slips through is rejected by the server.
+    Compiled DML and textual write statements are rejected client side (a
+    best-effort early error); the server-side guard is authoritative: on
+    PostgreSQL the connection is put into read-only transaction mode, on
+    SQLite and MySQL/MariaDB every new connection is switched to a
+    read-only session mode.
     """
 
     def __init__(self, url: str, **kwargs: Any) -> None:
@@ -352,6 +377,17 @@ class ReadOnlyDatabase(Database):
             kwargs["execution_options"] = execution_options
         super().__init__(url, **kwargs)
         event.listen(self.engine.sync_engine, "before_execute", self._reject_writes)
+        statement = _READ_ONLY_SESSION_STATEMENTS.get(self.dialect)
+        if statement is not None:
+
+            def _make_connection_read_only(dbapi_connection: Any, _: Any) -> None:
+                cursor = dbapi_connection.cursor()
+                try:
+                    cursor.execute(statement)
+                finally:
+                    cursor.close()
+
+            event.listen(self.engine.sync_engine, "connect", _make_connection_read_only)
 
     @staticmethod
     def _reject_writes(
@@ -362,11 +398,7 @@ class ReadOnlyDatabase(Database):
         _execution_options: Any,
     ) -> None:
         is_write = isinstance(clauseelement, UpdateBase) or (
-            isinstance(clauseelement, TextClause)
-            and (
-                _TEXT_WRITE.match(clauseelement.text) is not None
-                or _TEXT_CTE_WRITE.match(clauseelement.text) is not None
-            )
+            isinstance(clauseelement, TextClause) and _is_text_write(clauseelement.text)
         )
         if is_write:
             msg = f"Cannot execute {type(clauseelement).__name__} on a read replica"

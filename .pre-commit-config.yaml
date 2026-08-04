@@ -10,6 +10,10 @@ repos:
         args: [--allow-multiple-documents]
       - id: check-added-large-files
       - id: check-docstring-first
+        # fastapi.py documents module-level type aliases with PEP 224
+        # attribute docstrings, which this hook cannot distinguish from a
+        # misplaced module docstring
+        exclude: ^sqlargon/integrations/fastapi\.py$
       - id: debug-statements
       - id: end-of-file-fixer
       - id: trailing-whitespace

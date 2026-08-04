@@ -23,8 +23,7 @@ from sqlargon.integrations.fastapi import (
     transaction,
 )
 from sqlargon.types import GUID, GenerateUUID
-
-MEMORY_URL = "sqlite+aiosqlite:///:memory:"
+from tests import MEMORY_URL
 
 
 class Customer(Base):

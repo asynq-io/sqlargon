@@ -2,6 +2,7 @@ import pytest
 
 from sqlargon import Database
 from sqlargon.uow import SQLAlchemyUnitOfWork
+from tests import MEMORY_URL
 
 
 @pytest.mark.usefixtures("db")
@@ -111,7 +112,7 @@ async def test_uow_rollback(user_repository_class):
 
 
 async def test_uow_repositories_bound_to_uow_database(user_repository_class):
-    other_db = Database("sqlite+aiosqlite:///:memory:")
+    other_db = Database(MEMORY_URL)
 
     class TestUow(SQLAlchemyUnitOfWork):
         users: user_repository_class
@@ -121,7 +122,7 @@ async def test_uow_repositories_bound_to_uow_database(user_repository_class):
 
 
 async def test_uow_using_returns_fresh_unit(db: Database, user_repository_class):
-    other_db = Database("sqlite+aiosqlite:///:memory:")
+    other_db = Database(MEMORY_URL)
 
     class TestUow(SQLAlchemyUnitOfWork):
         users: user_repository_class
@@ -145,7 +146,7 @@ async def test_uow_repository_accessed_on_class_returns_repository_class(
 
 
 async def test_uow_database_class_attribute_used(user_repository_class):
-    other_db = Database("sqlite+aiosqlite:///:memory:")
+    other_db = Database(MEMORY_URL)
 
     class TestUow(SQLAlchemyUnitOfWork):
         database = other_db
@@ -157,8 +158,8 @@ async def test_uow_database_class_attribute_used(user_repository_class):
 
 
 async def test_uow_using_db_wins_over_class_attribute(user_repository_class):
-    class_db = Database("sqlite+aiosqlite:///:memory:")
-    other_db = Database("sqlite+aiosqlite:///:memory:")
+    class_db = Database(MEMORY_URL)
+    other_db = Database(MEMORY_URL)
 
     class TestUow(SQLAlchemyUnitOfWork):
         database = class_db

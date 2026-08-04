@@ -252,19 +252,15 @@ class SQLAlchemyRepository(Generic[Model]):
         return self.copy(query)
 
     def routing_context(
-        self, statement: Any = None, *, read_only: bool = False
+        self, statement: Any = None, *, read_only: bool | None = None
     ) -> RoutingContext:
-        return RoutingContext.create(
-            statement=statement,
-            model=getattr(type(self), "model", None),
-            read_only=read_only or self.routing.read_only,
-            hint=self.routing.hint,
-            shard_key=self.routing.shard_key,
+        return self.routing.context(
+            statement, getattr(type(self), "model", None), read_only=read_only
         )
 
     @asynccontextmanager
     async def session(
-        self, statement: Any = None, *, read_only: bool = False
+        self, statement: Any = None, *, read_only: bool | None = None
     ) -> AsyncGenerator[AsyncSession]:
         context = self.routing_context(statement, read_only=read_only)
         async with self.db.session_context(context) as session:
@@ -275,14 +271,18 @@ class SQLAlchemyRepository(Generic[Model]):
         query: Executable | TypedReturnsRows,
         params: Params | None = None,
         *,
-        read_only: bool = False,
+        read_only: bool | None = None,
         **kwargs: Any,
     ) -> Result:
         async with self.session(query, read_only=read_only) as session:
             return await session.execute(query, params, **kwargs)
 
     async def execute(
-        self, params: Params | None = None, *, read_only: bool = False, **kwargs: Any
+        self,
+        params: Params | None = None,
+        *,
+        read_only: bool | None = None,
+        **kwargs: Any,
     ) -> Result:
         return await self.execute_query(
             self.query, params, read_only=read_only, **kwargs
@@ -300,7 +300,7 @@ class SQLAlchemyRepository(Generic[Model]):
         query: Executable | TypedReturnsRows,
         params: Params | None = None,
         *,
-        read_only: bool = False,
+        read_only: bool | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[Row[Any]]:
         async with self.session(query, read_only=read_only) as session:
@@ -309,7 +309,11 @@ class SQLAlchemyRepository(Generic[Model]):
                 yield row
 
     def stream(
-        self, params: Params | None = None, *, read_only: bool = False, **kwargs: Any
+        self,
+        params: Params | None = None,
+        *,
+        read_only: bool | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator[Row[Any]]:
         return self.stream_query(self.query, params, read_only=read_only, **kwargs)
 
@@ -399,8 +403,8 @@ class SQLAlchemyRepository(Generic[Model]):
 
     async def delete_many(
         self, *args: _ColumnExpressionArgument[bool], **kwargs: Any
-    ) -> Sequence[Model]:
-        return await self.delete(return_results=True).filter(*args, **kwargs).all()
+    ) -> None:
+        await self.delete(return_results=False).filter(*args, **kwargs).execute()
 
     async def list(
         self, *args: _ColumnExpressionArgument[bool], **kwargs: Any
@@ -474,6 +478,11 @@ class SQLAlchemyRepository(Generic[Model]):
             return await q.all()
         await q.execute()
         return None
+
+    async def create_many(
+        self, items: MultipleValues, **options: Any
+    ) -> Sequence[Model]:
+        return await self.bulk_create(items, return_results=True, **options)
 
     async def bulk_update(
         self,

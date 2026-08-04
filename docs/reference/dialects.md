@@ -32,8 +32,8 @@ the statement is built — for instance `return_results=True` on a SQLite build 
 `return_results=False` there.
 
 `LOCKS` decides what `db.lock(name)` does: with support it takes a database-native advisory
-lock, otherwise it falls back to a process-local `asyncio.Lock` — correct within one process,
-but not across workers.
+lock, otherwise it falls back to an `asyncio.Lock` local to the `Database` instance — correct
+for tasks sharing that instance, but not across instances or workers.
 
 ## Conflict handling per dialect
 

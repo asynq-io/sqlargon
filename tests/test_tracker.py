@@ -3,6 +3,7 @@ import sqlalchemy as sa
 
 from sqlargon import Database
 from sqlargon.tracker import TRACKER, ConnectionTracker
+from tests import MEMORY_URL
 
 
 @pytest.fixture(autouse=True)
@@ -16,7 +17,7 @@ def tracker():
 
 @pytest.fixture
 async def tracked_database():
-    db = Database("sqlite+aiosqlite:///:memory:", enable_tracker=True)
+    db = Database(MEMORY_URL, enable_tracker=True)
     try:
         yield db
     finally:

@@ -89,10 +89,12 @@ def test_created_updated_client_defaults_share_one_timestamp_per_statement():
     assert created == updated
 
 
-def test_updated_at_column_has_onupdate():
+def test_updated_at_column_has_client_side_onupdate():
     column = _MixinModel.__table__.c.updated_at
-    assert isinstance(column.onupdate.arg, now)
-    assert isinstance(column.server_onupdate.arg, now)
+    # the client clock is the single source for ORM inserts and updates, so
+    # updated_at can never fall behind created_at under clock skew
+    assert column.onupdate.is_callable
+    assert column.server_onupdate is None
 
 
 def test_created_at_column_has_no_onupdate():
