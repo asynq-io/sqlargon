@@ -479,22 +479,25 @@ class SQLAlchemyRepository(Generic[Model]):
         await q.execute()
         return None
 
-    async def create_many(self, items: MultipleValues) -> Sequence[Model]:
+    async def create_many(
+        self, items: MultipleValues, *, ignore_conflicts: bool = False, **_: Any
+    ) -> Sequence[Model]:
         return await self.bulk_create(
-            items, return_results=True, ignore_conflicts=False
+            items, return_results=True, ignore_conflicts=ignore_conflicts
         )
 
     async def bulk_update(
         self,
         values: MultipleValues,
-        on_: set[str],
         *args: Any,
+        on_: set[str] | None = None,
     ) -> None:
         """Update many rows in a single executemany statement.
 
         An executemany cannot return rows; use :meth:`update_many` when the
         updated models are needed.
         """
+        on_ = on_ or self._get_default_index_elements()
         where = [getattr(self.model, field) == bindparam(f"u_{field}") for field in on_]
         values = [
             {key if key not in on_ else f"u_{key}": value for key, value in row.items()}
