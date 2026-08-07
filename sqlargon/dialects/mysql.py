@@ -30,13 +30,9 @@ class MysqlQueryBuilder(QueryBuilder):
             if on_conflict.do == "ignore":
                 query = query.prefix_with("IGNORE")
             elif on_conflict.do == "update":
-                to_set = {
-                    k
-                    for k in on_conflict.options.get("set_", [])
-                    if k not in on_conflict.options.get("exclude_set", [])
-                }
-                set_ = {k: getattr(query.inserted, k) for k in to_set}
-                query = query.on_duplicate_key_update(**set_)
+                query = query.on_duplicate_key_update(
+                    **self.conflict_set(on_conflict.options, query.inserted)
+                )
             else:
                 assert_never(on_conflict.do)
         return query

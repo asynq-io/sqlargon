@@ -11,7 +11,7 @@ Params = Mapping[str, Any] | Sequence[Mapping[str, Any]]
 
 class OnConflictOptions(TypedDict, total=False):
     index_elements: set[str]
-    set_: set[str]
+    set_: set[str] | Mapping[str, Any]
     constraint: str
     index_where: Any
     where: Any

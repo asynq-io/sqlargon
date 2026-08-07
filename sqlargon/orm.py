@@ -1,8 +1,10 @@
 import re
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from sqlalchemy import MetaData
 from sqlalchemy.orm import DeclarativeBase, declared_attr
+
+from .mixins import SoftDeleteMixin
 
 camel_to_snake = re.compile(r"(?<!^)(?=[A-Z])")
 
@@ -28,16 +30,37 @@ class Base(DeclarativeBase):
 
     __mapper_args__: Any = {"eager_defaults": True}  # noqa: RUF012
 
-    @declared_attr.directive
-    def __tablename__(cls) -> str:
-        """
-        By default, turn the model's camel-case class name
-        into a snake-case table name. Override by providing
-        an explicit `__tablename__` class property.
-        """
-        return camel_to_snake.sub("_", cls.__name__).lower()  # type: ignore[attr-defined]
+    if TYPE_CHECKING:
+        __tablename__: str
+    else:
+
+        @declared_attr.directive
+        def __tablename__(cls) -> str:
+            """
+            By default, turn the model's camel-case class name
+            into a snake-case table name. Override by providing
+            an explicit `__tablename__` class property.
+            """
+            return camel_to_snake.sub("_", cls.__name__).lower()
 
 
 ORMModel = Base
 
 Model = TypeVar("Model", bound=Base)
+
+
+class SoftDeleteBase(SoftDeleteMixin, Base):
+    """Declarative base for models that are deleted by raising a tombstone.
+
+    Inherit it instead of combining :class:`SoftDeleteMixin` with
+    :class:`~sqlargon.orm.Base` by hand, so
+    :class:`~sqlargon.repository.SoftDeleteRepository` can type its model::
+
+        class User(UUIDModelMixin, SoftDeleteBase):
+            name: Mapped[str] = mapped_column(sa.Unicode(255))
+    """
+
+    __abstract__ = True
+
+
+SoftDeleteModel = TypeVar("SoftDeleteModel", bound=SoftDeleteBase)

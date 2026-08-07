@@ -49,10 +49,17 @@ description to the builder, which renders it natively:
 | `index_where` | ✅ | ✅ | ignored |
 | `where` | ✅ | ✅ | ignored |
 | `set_` / `exclude_set` | ✅ | ✅ | ✅ |
+| `qb.excluded(model)` | ✅ | ✅ | ❌ |
 
 MySQL's `ON DUPLICATE KEY UPDATE` has no target or predicate of its own: it reacts to any
 unique key, so `index_elements`, `constraint`, `index_where` and `where` do not apply.
 `set_` minus `exclude_set` becomes the assignment list on every dialect.
+
+Naming a column in `set_` assigns it the value proposed for insertion. Passing `set_` as a
+mapping assigns an expression instead, built against `qb.excluded(model)` — the `excluded`
+pseudo row — and the model itself for the stored row. MySQL renders that row inline as
+`VALUES(col)` rather than as a table, so it cannot hand it out before the statement exists
+and `excluded()` raises `UnsupportedOption` there.
 
 ## Advisory locks
 

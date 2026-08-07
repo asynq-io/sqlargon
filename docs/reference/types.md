@@ -140,7 +140,7 @@ Both accept `sa_column_type=` to store in something other than `JSON` (e.g. `sa.
 | `UUIDModelMixin` | `id` — `GUID` primary key, `uuid4` client default, `GenerateUUID()` server default | |
 | `UUIDV7ModelMixin` | `id` — `GUID` primary key, `uuid7` client default, `GenerateUUIDV7()` server default | |
 | `CreatedUpdatedMixin` | `created_at`, `updated_at` — `Timestamp`, `now()` server defaults, `onupdate` | `is_new` hybrid property |
-| `SoftDeleteMixin` | `tombstone` — boolean, defaults to false | `not_deleted` hybrid property |
+| `SoftDeleteMixin` | `tombstone` — boolean, defaults to false | `not_deleted` and `is_deleted` hybrid properties |
 
 ```python
 from sqlargon.mixins import CreatedUpdatedMixin, SoftDeleteMixin, UUIDV7ModelMixin
@@ -156,13 +156,28 @@ moved on by `onupdate` / `server_onupdate` — rows updated by raw SQL keep an a
 timestamp too. Because the two columns share one server-side value, a freshly inserted row
 has `created_at == updated_at` exactly, including every row of a multi-row insert.
 
-Both hybrids work at instance level and as SQL expressions, so either can be used in a
+The hybrids work at instance level and as SQL expressions, so either can be used in a
 filter:
 
 ```python
 await repo.list(User.is_new)        # created_at = updated_at
 await repo.list(User.not_deleted)   # NOT tombstone
+await repo.list(User.is_deleted)    # tombstone IS true
 
 user = await repo.get(id=user_id)
-user.is_new, user.not_deleted
+user.is_new, user.not_deleted, user.is_deleted
 ```
+
+`SoftDeleteMixin` only declares the column; to have deletes raise the flag automatically,
+build the repository on [`SoftDeleteRepository`](../usage.md#soft-deletes) and the model on
+`SoftDeleteBase`, which is that mixin already combined with `Base`:
+
+```python
+from sqlargon import SoftDeleteBase
+
+
+class User(UUIDV7ModelMixin, CreatedUpdatedMixin, SoftDeleteBase):
+    name: Mapped[str] = mapped_column(sa.Unicode(255))
+```
+
+`SoftDeleteModel` is the matching type variable, bound to `SoftDeleteBase`.

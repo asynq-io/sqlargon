@@ -6,6 +6,10 @@ Generated from the source. See [Usage](../usage.md) for a narrative introduction
 
 ::: sqlargon.repository.SQLAlchemyRepository
 
+::: sqlargon.repository.SoftDeleteRepository
+
+::: sqlargon.repository.DeletedRowExistsError
+
 ::: sqlargon.functools.atomic
 
 ## Unit of work
@@ -87,6 +91,18 @@ Generated from the source. See [Usage](../usage.md) for a narrative introduction
 ::: sqlargon.pagination.cursor.CursorPagination
 
 ::: sqlargon.pagination.models
+
+## Cron
+
+::: sqlargon.cron.Cron
+
+::: sqlargon.cron.CronTask
+
+::: sqlargon.cron.CronTaskRepository
+
+::: sqlargon.cron.validate_schedule
+
+::: sqlargon.cron.next_run_time
 
 ## ORM and types
 

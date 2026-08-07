@@ -7,7 +7,12 @@ from sqlalchemy.dialects import mysql, postgresql, sqlite
 from sqlargon.dialects.mysql import MysqlQueryBuilder
 from sqlargon.dialects.postgres import INT64_SIZE, PostgresqlQueryBuilder, _key_to_int
 from sqlargon.dialects.sqlite import SQLiteQueryBuilder
-from sqlargon.query_builder import Option, QueryBuilder, get_query_builder
+from sqlargon.query_builder import (
+    Option,
+    QueryBuilder,
+    UnsupportedOption,
+    get_query_builder,
+)
 from sqlargon.typing import OnConflict
 
 # Table defined at module level to avoid re-registration with --count=3
@@ -293,6 +298,59 @@ def test_sqlite_insert_without_on_conflict_is_plain_insert(sqlite_qb):
     assert compiled(query, sqlite.dialect()) == (
         "INSERT INTO dialect_item (id, name, note) VALUES (?, ?, ?)"
     )
+
+
+# --- expression valued set_ ---
+
+
+@pytest.mark.parametrize(
+    ("dialect", "compiler"),
+    [("postgresql", postgresql.dialect()), ("sqlite", sqlite.dialect())],
+)
+def test_insert_do_update_with_an_expression(dialect, compiler):
+    qb = get_query_builder(dialect)
+    excluded = qb.excluded(item)
+    on_conflict = OnConflict(
+        do="update",
+        options={
+            "index_elements": {"id"},
+            "set_": {"name": excluded.name, "note": item.c.note + excluded.note},
+        },
+    )
+    query = qb.insert(item, VALUES, on_conflict=on_conflict)
+    assert compiled(query, compiler).endswith(
+        "ON CONFLICT (id) DO UPDATE SET name = excluded.name, "
+        "note = (dialect_item.note || excluded.note)"
+    )
+
+
+@pytest.mark.parametrize(
+    ("dialect", "compiler"),
+    [
+        ("postgresql", postgresql.dialect()),
+        ("sqlite", sqlite.dialect()),
+        ("mysql", mysql.dialect()),
+    ],
+)
+def test_insert_do_update_expression_honours_exclude_set(dialect, compiler):
+    qb = get_query_builder(dialect)
+    on_conflict = OnConflict(
+        do="update",
+        options={
+            "index_elements": {"id"},
+            "set_": {"name": item.c.name, "note": item.c.note},
+            "exclude_set": {"note"},
+        },
+    )
+    query = qb.insert(item, VALUES, on_conflict=on_conflict)
+    assert compiled(query, compiler).endswith("name = dialect_item.name")
+
+
+@pytest.mark.parametrize("qb", [QueryBuilder(), MysqlQueryBuilder()])
+def test_excluded_row_is_unsupported(qb):
+    """MySQL renders it as ``VALUES(col)``, which cannot be built up front."""
+    with pytest.raises(UnsupportedOption, match="dialect_item"):
+        qb.excluded(item)
 
 
 # --- unreachable on_conflict.do ---
