@@ -102,14 +102,14 @@ from sqlargon.orm import Model
 class R1(SQLAlchemyRepository, model=User): ...            # explicit model
 
 
-class SoftDeleteRepository(SQLAlchemyRepository[Model], abstract=True):
+class TenantRepository(SQLAlchemyRepository[Model], abstract=True):
     """Shared behaviour, no model of its own."""
 
-    async def alive(self):
-        return await self.filter(tombstone=False).all()
+    async def for_tenant(self, tenant_id):
+        return await self.filter(tenant_id=tenant_id).all()
 
 
-class R2(SoftDeleteRepository[User]): ...                   # model from the subscript
+class R2(TenantRepository[User]): ...                       # model from the subscript
 
 
 class AuditedRepository(SQLAlchemyRepository, abstract=True): ...
@@ -196,6 +196,92 @@ class UserRepository(SQLAlchemyRepository[User]):
 Options can also be passed per call: `await users.upsert(rows, index_elements={"email"})`.
 Supported keys are `index_elements`, `constraint`, `index_where`, `set_`, `exclude_set` and
 `where`; support per dialect is listed in the [dialects reference](reference/dialects.md).
+
+A column is normally overwritten with the value proposed for insertion. Pass `set_` as a
+mapping to update one from an expression instead — `excluded` is the proposed row, and the
+model refers to the row already stored (PostgreSQL and SQLite only):
+
+```python
+excluded = users.qb.excluded(User)
+
+await users.upsert(
+    rows,
+    index_elements={"email"},
+    set_={"name": excluded.name, "logins": User.logins + 1},
+)
+```
+
+## Soft deletes
+
+`SoftDeleteRepository` tombstones rows instead of removing them. Declare the model on
+`SoftDeleteBase` — [`SoftDeleteMixin`](reference/types.md#mixins) already mixed into `Base` —
+so the repository knows its model carries a `tombstone` column:
+
+```python
+from sqlargon import SoftDeleteBase, SoftDeleteRepository
+from sqlargon.mixins import UUIDModelMixin
+
+
+class User(UUIDModelMixin, SoftDeleteBase):
+    name: Mapped[str] = mapped_column(sa.Unicode(255))
+
+
+class UserRepository(SoftDeleteRepository[User]): ...
+
+
+users = UserRepository()
+```
+
+Every statement is scoped to live rows — no `tombstone=False` filter to remember, and no way
+to update a row that has been deleted:
+
+```python
+await users.remove(User.id == user_id)     # UPDATE ... SET tombstone = true
+user = await users.delete_one(User.id == user_id)   # the tombstoned row
+await users.delete_many(User.name == "John")
+
+await users.list()                         # deleted rows are gone from reads
+await users.count()                        # ... and from counts
+await users.update_many({"name": "Sarah"}) # ... and are never updated
+```
+
+Reach past the scope explicitly:
+
+```python
+await users.with_deleted().all()           # live and deleted rows
+await users.only_deleted().all()           # the trash
+await users.only_deleted().count()         # ... how full it is
+await users.only_deleted().hard_delete()   # ... and emptied
+restored = await users.restore(User.id == user_id)  # clears the tombstone
+await users.hard_delete(User.is_deleted)   # a real DELETE
+```
+
+Both scopes hold for every statement the returned copy builds — reads, counts, updates and
+bulk updates alike — not just the next one.
+
+The flag belongs to `delete` and `restore` alone: it is left out of the default
+`ON CONFLICT DO UPDATE` set, so `create_or_update` cannot silently resurrect a deleted row.
+For the same reason `get_or_create` raises `DeletedRowExistsError` when the row it would
+create is held by a tombstoned one — creating it would break the unique key, and returning it
+would resurrect it behind your back. Restore or hard delete it first.
+
+`SoftDeleteRepository` is generic over `SoftDeleteModel`, a type variable bound to
+`SoftDeleteBase`, so a type checker rejects `SoftDeleteRepository[SomeOtherModel]` at the
+subscript. At runtime the looser `SoftDeleteMixin` is enough — a model that mixes it into
+`Base` by hand works, it just needs a `# type: ignore[type-var]`. Anything without the mixin
+raises `TypeError` on subclassing. Write shared behaviour against the same type variable:
+
+```python
+from sqlargon import SoftDeleteModel
+
+
+class AuditedRepository(SoftDeleteRepository[SoftDeleteModel], abstract=True):
+    async def purge_trash(self) -> None:
+        await self.hard_delete(self.model.is_deleted)
+
+
+class UserRepository(AuditedRepository[User]): ...
+```
 
 ## Building queries
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal, overload
 
 import sqlalchemy as sa
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
         ReturningUpdate,
     )
 
-    from .typing import OnConflict, Values, WithForUpdate
+    from .typing import OnConflict, OnConflictOptions, Values, WithForUpdate
 
 from enum import Flag, auto
 
@@ -58,6 +59,20 @@ class QueryBuilder:
         if options:
             query = query.options(*options)
         return query
+
+    def excluded(self, table: _DMLTableArgument) -> Any:
+        msg = f"Cannot reference the excluded row of {table}"
+        raise UnsupportedOption(msg)
+
+    def conflict_set(self, options: OnConflictOptions, excluded: Any) -> dict[str, Any]:
+        set_ = options.get("set_") or ()
+        exclude = options.get("exclude_set") or ()
+        overrides = set_ if isinstance(set_, Mapping) else {}
+        return {
+            key: overrides[key] if key in overrides else getattr(excluded, key)
+            for key in set_
+            if key not in exclude
+        }
 
     def _insert(
         self,
