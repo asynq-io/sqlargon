@@ -189,7 +189,8 @@ def test_query_builder_get_lock_pair(dialect):
     lock, unlock = qb.get_lock_pair("test")
     assert str(lock) == str(qb.lock("test"))
     assert str(unlock) == str(qb.unlock("test"))
-    assert lock.compile().params == unlock.compile().params
+    # the pair addresses one key; on MySQL the lock also carries a wait timeout
+    assert lock.compile().params["key"] == unlock.compile().params["key"]
 
 
 def test_sqlite_get_lock_pair_unsupported(sqlite_qb):

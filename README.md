@@ -333,3 +333,25 @@ from sqlargon import use_context
 async def reports(repo: UserRepository = Depends()) -> list[UserOut]:
     return await repo.all()
 ```
+
+## Tests
+
+The unit suite runs against an in-memory SQLite database and needs nothing installed:
+
+```bash
+pytest
+```
+
+The end-to-end suite runs the same stack against PostgreSQL, MySQL, MariaDB and an on-disk
+SQLite database, spinning the servers up and tearing them down with
+[testcontainers](https://testcontainers-python.readthedocs.io) — so it only needs a Docker
+daemon. It is skipped unless asked for:
+
+```bash
+pytest --e2e                              # unit suite + every backend
+pytest --e2e ./tests/e2e                  # e2e only
+pytest --e2e --e2e-backends=mysql,mariadb # selected backends
+```
+
+See [tests/e2e/README.md](tests/e2e/README.md) for the layout and the per-backend
+capability gaps it pins down.

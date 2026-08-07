@@ -4,7 +4,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.dialects import mysql, postgresql, sqlite
 
-from sqlargon.dialects.mysql import MysqlQueryBuilder
+from sqlargon.dialects.mysql import LOCK_TIMEOUT_SECONDS, MysqlQueryBuilder
 from sqlargon.dialects.postgres import INT64_SIZE, PostgresqlQueryBuilder, _key_to_int
 from sqlargon.dialects.sqlite import SQLiteQueryBuilder
 from sqlargon.query_builder import (
@@ -149,8 +149,11 @@ def test_mysql_upsert_multiple_values(mysql_qb):
 
 def test_mysql_lock(mysql_qb):
     lock = mysql_qb.lock("my-key")
-    assert str(lock) == "SELECT GET_LOCK(:key, -1)"
-    assert lock.compile().params == {"key": "my-key"}
+    assert str(lock) == "SELECT GET_LOCK(:key, :timeout)"
+    assert lock.compile().params == {
+        "key": "my-key",
+        "timeout": LOCK_TIMEOUT_SECONDS,
+    }
 
 
 def test_mysql_unlock(mysql_qb):
@@ -161,9 +164,14 @@ def test_mysql_unlock(mysql_qb):
 
 def test_mysql_get_lock_pair(mysql_qb):
     lock, unlock = mysql_qb.get_lock_pair("my-key")
-    assert str(lock) == "SELECT GET_LOCK(:key, -1)"
+    assert str(lock) == "SELECT GET_LOCK(:key, :timeout)"
     assert str(unlock) == "SELECT RELEASE_LOCK(:key)"
-    assert lock.compile().params == unlock.compile().params == {"key": "my-key"}
+    assert unlock.compile().params == {"key": "my-key"}
+
+
+def test_mysql_lock_timeout_is_positive():
+    # MariaDB answers NULL to a negative timeout instead of taking the lock
+    assert LOCK_TIMEOUT_SECONDS > 0
 
 
 # --- postgresql ---

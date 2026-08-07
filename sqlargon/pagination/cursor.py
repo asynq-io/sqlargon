@@ -107,7 +107,7 @@ class CursorPaginator(Paginator[ModelT]):
         cursor: str | None = ...,
         page_size: int | None = ...,
         *,
-        as_model: Literal[True],
+        as_model: Literal[True] = ...,
     ) -> AsyncIterator[CursorPage[ModelT]]: ...
 
     @overload
