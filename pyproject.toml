@@ -1,6 +1,6 @@
 [project]
 name = "sqlargon"
-version = "1.0.3b1"
+version = "1.0.4b1"
 description = "SQLAlchemy repository pattern and utilities"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
@@ -29,9 +29,16 @@ standard = ["asyncpg<1.0", "aiosqlite>=0.19.0,<1", "sqlakeyset>=2.0.1716332987,<
 dev = [
     { include-group = "lint" },
     { include-group = "test" },
+    { include-group = "e2e" },
     { include-group = "docs" },
     "fastapi>=0.138.0",
     "greenlet",
+]
+
+e2e = [
+    "testcontainers>=4.15.0",
+    # asyncmy needs it for the caching_sha2_password auth of MySQL 8
+    "cryptography",
 ]
 
 test = [
@@ -41,6 +48,7 @@ test = [
     "pytest-repeat",
     "pytest-asyncio",
     "httpx>=0.28.1",
+    "pytest-timeout>=2.4.0",
 ]
 
 lint = [
@@ -71,13 +79,25 @@ build-backend = "uv_build"
 addopts = "--cov=./sqlargon --count=3"
 testpaths = ["./tests"]
 asyncio_mode = "auto"
+timeout = 20
+markers = [
+    "e2e: runs against a real database backend; enabled with --e2e",
+]
 
 [tool.mypy]
 python_version = "3.10"
 namespace_packages = true
 ignore_missing_imports = true
 no_site_packages = true
+disable_error_code = ["annotation-unchecked"]
 exclude = ["^tmp/"]
+
+[[tool.mypy.overrides]]
+# croniter ships no py.typed marker and its stubs (types-croniter) live in
+# site-packages, which this config deliberately ignores
+module = ["croniter.*"]
+ignore_missing_imports = true
+follow_untyped_imports = true
 
 [tool.coverage.report]
 exclude_lines = [
@@ -125,6 +145,10 @@ classmethod-decorators = [
 "sqlargon/*" = ["PLC0415"]
 "sqlargon/types/*" = ["ARG002"]
 "tests/*" = ["S101", "ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "SLF001", "PLR2004", "ARG002"]
+# a fixture requested for its side effect only, and testcontainers imported
+# lazily so an ordinary run never pulls it in
+"tests/e2e/conftest.py" = ["ARG001"]
+"tests/e2e/backends.py" = ["PLC0415"]
 
 [tool.ruff.format]
 quote-style = "double"

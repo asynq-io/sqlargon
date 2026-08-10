@@ -34,6 +34,10 @@ class TeamRepository(SQLAlchemyRepository[Team]):
     pass
 
 
+class OrderedTeamRepository(SQLAlchemyRepository[Team]):
+    default_order_by = Team.id
+
+
 @pytest.fixture
 async def team_tables(db: Database):
     async with db.engine.begin() as conn:
@@ -301,6 +305,16 @@ async def test_default_order_by(user_repository):
     ).execute()
     users = await user_repository.all()
     assert [u.name for u in users] == ["Charlie", "Bob", "Alice"]
+
+
+@pytest.mark.usefixtures("team_tables")
+async def test_default_order_by_accepts_a_bare_mapped_column():
+    # a mapped column is a descriptor, so resolving it against the repository
+    # instance rather than the class falls through to __getattr__
+    repository = OrderedTeamRepository()
+    await repository.insert([{"id": 2}, {"id": 1}]).execute()
+
+    assert [team.id for team in await repository.all()] == [1, 2]
 
 
 async def test_await_repository(user_repository):

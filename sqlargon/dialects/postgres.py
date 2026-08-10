@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from hashlib import md5
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import Insert, insert
@@ -29,6 +29,9 @@ class PostgresqlQueryBuilder(QueryBuilder):
     _lock_query = sa.text("SELECT pg_advisory_lock(:key)")
     _unlock_query = sa.text("SELECT pg_advisory_unlock(:key)")
 
+    def excluded(self, table: _DMLTableArgument) -> Any:
+        return insert(table).excluded
+
     def _insert(
         self,
         table: _DMLTableArgument,
@@ -44,15 +47,9 @@ class PostgresqlQueryBuilder(QueryBuilder):
                 for k in ("constraint", "index_elements", "index_where")
             }
             if on_conflict.do == "update":
-                to_set = {
-                    k
-                    for k in on_conflict.options.get("set_", [])
-                    if k not in on_conflict.options.get("exclude_set", [])
-                }
-                set_ = {k: getattr(query.excluded, k) for k in to_set}
                 query = query.on_conflict_do_update(
                     **kw,
-                    set_=set_,
+                    set_=self.conflict_set(on_conflict.options, query.excluded),
                     where=on_conflict.options.get("where"),
                 )
             elif on_conflict.do == "ignore":

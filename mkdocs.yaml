@@ -23,6 +23,7 @@ nav:
   - "Usage": usage.md
   - "Database Routing": routing.md
   - "Pagination": pagination.md
+  - "Cron": cron.md
   - "Examples": examples.md
   - "Reference":
     - "Column Types & Mixins": reference/types.md

@@ -4,10 +4,15 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.dialects import mysql, postgresql, sqlite
 
-from sqlargon.dialects.mysql import MysqlQueryBuilder
+from sqlargon.dialects.mysql import LOCK_TIMEOUT_SECONDS, MysqlQueryBuilder
 from sqlargon.dialects.postgres import INT64_SIZE, PostgresqlQueryBuilder, _key_to_int
 from sqlargon.dialects.sqlite import SQLiteQueryBuilder
-from sqlargon.query_builder import Option, QueryBuilder, get_query_builder
+from sqlargon.query_builder import (
+    Option,
+    QueryBuilder,
+    UnsupportedOption,
+    get_query_builder,
+)
 from sqlargon.typing import OnConflict
 
 # Table defined at module level to avoid re-registration with --count=3
@@ -68,7 +73,7 @@ def test_get_query_builder_is_cached():
     ("dialect", "expected"),
     [
         ("postgresql", Option.RETURNING | Option.CONFLICTS | Option.LOCKS),
-        ("mysql", Option.RETURNING | Option.CONFLICTS | Option.LOCKS),
+        ("mysql", Option.CONFLICTS | Option.LOCKS),
         ("oracle", Option.NONE),
     ],
 )
@@ -144,8 +149,11 @@ def test_mysql_upsert_multiple_values(mysql_qb):
 
 def test_mysql_lock(mysql_qb):
     lock = mysql_qb.lock("my-key")
-    assert str(lock) == "SELECT GET_LOCK(:key, -1)"
-    assert lock.compile().params == {"key": "my-key"}
+    assert str(lock) == "SELECT GET_LOCK(:key, :timeout)"
+    assert lock.compile().params == {
+        "key": "my-key",
+        "timeout": LOCK_TIMEOUT_SECONDS,
+    }
 
 
 def test_mysql_unlock(mysql_qb):
@@ -156,9 +164,14 @@ def test_mysql_unlock(mysql_qb):
 
 def test_mysql_get_lock_pair(mysql_qb):
     lock, unlock = mysql_qb.get_lock_pair("my-key")
-    assert str(lock) == "SELECT GET_LOCK(:key, -1)"
+    assert str(lock) == "SELECT GET_LOCK(:key, :timeout)"
     assert str(unlock) == "SELECT RELEASE_LOCK(:key)"
-    assert lock.compile().params == unlock.compile().params == {"key": "my-key"}
+    assert unlock.compile().params == {"key": "my-key"}
+
+
+def test_mysql_lock_timeout_is_positive():
+    # MariaDB answers NULL to a negative timeout instead of taking the lock
+    assert LOCK_TIMEOUT_SECONDS > 0
 
 
 # --- postgresql ---
@@ -293,6 +306,59 @@ def test_sqlite_insert_without_on_conflict_is_plain_insert(sqlite_qb):
     assert compiled(query, sqlite.dialect()) == (
         "INSERT INTO dialect_item (id, name, note) VALUES (?, ?, ?)"
     )
+
+
+# --- expression valued set_ ---
+
+
+@pytest.mark.parametrize(
+    ("dialect", "compiler"),
+    [("postgresql", postgresql.dialect()), ("sqlite", sqlite.dialect())],
+)
+def test_insert_do_update_with_an_expression(dialect, compiler):
+    qb = get_query_builder(dialect)
+    excluded = qb.excluded(item)
+    on_conflict = OnConflict(
+        do="update",
+        options={
+            "index_elements": {"id"},
+            "set_": {"name": excluded.name, "note": item.c.note + excluded.note},
+        },
+    )
+    query = qb.insert(item, VALUES, on_conflict=on_conflict)
+    assert compiled(query, compiler).endswith(
+        "ON CONFLICT (id) DO UPDATE SET name = excluded.name, "
+        "note = (dialect_item.note || excluded.note)"
+    )
+
+
+@pytest.mark.parametrize(
+    ("dialect", "compiler"),
+    [
+        ("postgresql", postgresql.dialect()),
+        ("sqlite", sqlite.dialect()),
+        ("mysql", mysql.dialect()),
+    ],
+)
+def test_insert_do_update_expression_honours_exclude_set(dialect, compiler):
+    qb = get_query_builder(dialect)
+    on_conflict = OnConflict(
+        do="update",
+        options={
+            "index_elements": {"id"},
+            "set_": {"name": item.c.name, "note": item.c.note},
+            "exclude_set": {"note"},
+        },
+    )
+    query = qb.insert(item, VALUES, on_conflict=on_conflict)
+    assert compiled(query, compiler).endswith("name = dialect_item.name")
+
+
+@pytest.mark.parametrize("qb", [QueryBuilder(), MysqlQueryBuilder()])
+def test_excluded_row_is_unsupported(qb):
+    """MySQL renders it as ``VALUES(col)``, which cannot be built up front."""
+    with pytest.raises(UnsupportedOption, match="dialect_item"):
+        qb.excluded(item)
 
 
 # --- unreachable on_conflict.do ---

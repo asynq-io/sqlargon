@@ -15,7 +15,7 @@ Builders declare what they support as an `Option` flag, checked with
 | --- | --- | --- | --- |
 | `postgresql` | ✅ | ✅ | ✅ `pg_advisory_lock` |
 | `sqlite` | ✅ (SQLite ≥ 3.35) | ✅ | ❌ |
-| `mysql` | ✅ | ✅ | ✅ `GET_LOCK` |
+| `mysql` | ❌ | ✅ | ✅ `GET_LOCK` |
 | anything else | ❌ | ❌ | ❌ |
 
 ```python
@@ -27,9 +27,22 @@ if db.query_builder.supports(Option.RETURNING):
 
 Asking for an unsupported feature raises `UnsupportedOption` (a `QueryBuilderError`) when
 the statement is built — for instance `return_results=True` on a SQLite build older than
-3.35. `RETURNING` is declared for MySQL, but note that only MariaDB 10.5+ implements
-`INSERT ... RETURNING`; on MySQL proper the statement will fail at execution time, so keep
-`return_results=False` there.
+3.35, or on any MySQL family server. MySQL has no `RETURNING` clause at all, and MariaDB
+implements it for `INSERT` and `DELETE` but never for `UPDATE`; both reach sqlargon as the
+same `mysql` dialect, so neither claims one.
+
+The high-level repository methods do not need the clause. `create`, `create_or_update`,
+`get_or_create`, `create_many`, `update_one`, `update_many`, `delete_one` and the bulk
+helpers called with `return_results=True` all return models on every dialect: where there
+is no `RETURNING` they name the rows they are about to write — generating the client-side
+column defaults for the conflict target up front — and read them back in a second
+statement, inside the same transaction as the write. Only the low-level
+`insert`/`upsert`/`update`/`delete` builders, called with `return_results=True` by hand,
+still raise.
+
+The re-read needs to be able to name a row, so a model whose conflict target the *server*
+fills in — a sequence, an autoincrement or a server default — raises `UnsupportedOption`
+from those methods on such a dialect. Give the column a client-side `default` to fix it.
 
 `LOCKS` decides what `db.lock(name)` does: with support it takes a database-native advisory
 lock, otherwise it falls back to an `asyncio.Lock` local to the `Database` instance — correct
@@ -49,10 +62,17 @@ description to the builder, which renders it natively:
 | `index_where` | ✅ | ✅ | ignored |
 | `where` | ✅ | ✅ | ignored |
 | `set_` / `exclude_set` | ✅ | ✅ | ✅ |
+| `qb.excluded(model)` | ✅ | ✅ | ❌ |
 
 MySQL's `ON DUPLICATE KEY UPDATE` has no target or predicate of its own: it reacts to any
 unique key, so `index_elements`, `constraint`, `index_where` and `where` do not apply.
 `set_` minus `exclude_set` becomes the assignment list on every dialect.
+
+Naming a column in `set_` assigns it the value proposed for insertion. Passing `set_` as a
+mapping assigns an expression instead, built against `qb.excluded(model)` — the `excluded`
+pseudo row — and the model itself for the stored row. MySQL renders that row inline as
+`VALUES(col)` rather than as a table, so it cannot hand it out before the statement exists
+and `excluded()` raises `UnsupportedOption` there.
 
 ## Advisory locks
 
