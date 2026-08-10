@@ -100,9 +100,9 @@ Generated from the source. See [Usage](../usage.md) for a narrative introduction
 
 ::: sqlargon.cron.CronTaskRepository
 
-::: sqlargon.cron.validate_schedule
+::: sqlargon.cron.utils.validate_schedule
 
-::: sqlargon.cron.next_run_time
+::: sqlargon.cron.utils.next_run_time
 
 ## ORM and types
 
