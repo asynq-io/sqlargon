@@ -21,7 +21,7 @@ LOCK_TIMEOUT_SECONDS = 31536000
 
 
 class MysqlQueryBuilder(QueryBuilder):
-    supported_options = Option.RETURNING | Option.CONFLICTS | Option.LOCKS
+    supported_options = Option.CONFLICTS | Option.LOCKS
 
     def _insert(
         self,

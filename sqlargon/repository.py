@@ -4,18 +4,23 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, Literal, overload
 
 from sqlalchemy import (
+    Delete,
     Executable,
     MappingResult,
     Result,
     Row,
     ScalarResult,
     SQLColumnExpression,
+    and_,
     bindparam,
+    false,
+    or_,
 )
 from sqlalchemy.orm import QueryableAttribute, selectinload
 
 from .mixins import SoftDeleteMixin
 from .orm import Base, Model, SoftDeleteModel
+from .query_builder import Option, UnsupportedOption
 from .registry import get_default_database
 from .routing import RoutingContext, RoutingOptions
 from .typing import (
@@ -359,25 +364,161 @@ class SQLAlchemyRepository(Generic[Model]):
     ) -> Model | None:
         return await self.filter(*args, **kwargs).one_or_none()
 
+    @classmethod
+    def _column(cls, name: str) -> Any:
+        return cls.model.__table__.columns[name]  # type: ignore[attr-defined]
+
+    @classmethod
+    def _identity_elements(
+        cls, options: OnConflictOptions | None = None
+    ) -> tuple[str, ...]:
+        elements = (options or {}).get("index_elements")
+        return tuple(elements or cls._get_default_index_elements())
+
+    @staticmethod
+    def _identity(values: SingleValue, elements: tuple[str, ...]) -> tuple[Any, ...]:
+        return tuple(values[name] for name in elements)
+
+    def _identified(
+        self, values: SingleValue, elements: tuple[str, ...]
+    ) -> dict[str, Any]:
+        row = dict(values)
+        for name in elements:
+            if row.get(name) is not None:
+                continue
+            default = self._column(name).default
+            if default is None or not (default.is_scalar or default.is_callable):
+                msg = (
+                    f"{self.model.__name__}.{name} is filled by the server, so the "
+                    f"{self.db.dialect} dialect cannot return the written rows "
+                    "without a RETURNING clause"
+                )
+                raise UnsupportedOption(msg)
+            row[name] = default.arg(None) if default.is_callable else default.arg
+        return row
+
+    def _identity_filter(
+        self, rows: Sequence[SingleValue], elements: tuple[str, ...]
+    ) -> Any:
+        if not rows:
+            return false()
+        if len(elements) == 1:
+            name = elements[0]
+            return self._column(name).in_([row[name] for row in rows])
+        return or_(
+            *(
+                and_(*(self._column(name) == row[name] for name in elements))
+                for row in rows
+            )
+        )
+
+    async def _identities(
+        self, elements: tuple[str, ...], where: Any = None
+    ) -> list[tuple[Any, ...]]:
+        query = self.qb.select(*(self._column(name) for name in elements))
+        if where is not None:
+            query = query.where(where)
+        return [tuple(row) for row in (await self.execute_query(query)).all()]
+
+    async def _fetch(self, where: Any = None) -> ScalarResult[Model]:
+        query = self.qb.select(self.model)
+        if where is not None:
+            query = query.where(where)
+        return (await self.execute_query(query)).scalars()
+
+    def _insert_statement(
+        self,
+        values: Values,
+        do: Literal["ignore", "update"] | None,
+        options: OnConflictOptions,
+        *,
+        return_results: bool,
+    ) -> Self:
+        if do == "update":
+            return self.upsert(values, return_results=return_results, **options)
+        return self.insert(
+            values,
+            return_results=return_results,
+            ignore_conflicts=do == "ignore",
+            **options,
+        )
+
+    async def _insert_returning(
+        self,
+        values: MultipleValues,
+        *,
+        do: Literal["ignore", "update"] | None = None,
+        **options: Unpack[OnConflictOptions],
+    ) -> ScalarResult[Model]:
+        if self.qb.supports(Option.RETURNING):
+            statement = self._insert_statement(values, do, options, return_results=True)
+            return await statement.scalars()
+
+        elements = self._identity_elements(self.on_conflict | options)
+        rows = [self._identified(row, elements) for row in values]
+        statement = self._insert_statement(rows, do, options, return_results=False)
+        async with self.session(statement.query):
+            written = rows
+            if do == "ignore":
+                identities = await self._identities(
+                    elements, self._identity_filter(rows, elements)
+                )
+                stored = set(identities)
+                written = [
+                    row for row in rows if self._identity(row, elements) not in stored
+                ]
+            await statement.execute()
+            return await self._fetch(self._identity_filter(written, elements))
+
+    async def _write_returning(self, statement: Self) -> ScalarResult[Model]:
+        query = statement.query
+        async with self.session(query):
+            if isinstance(query, Delete):
+                rows = await self._fetch(query.whereclause)
+                await statement.execute()
+                return rows
+            elements = self._identity_elements()
+            identities = await self._identities(elements, query.whereclause)
+            await statement.execute()
+            written = [
+                dict(zip(elements, identity, strict=True)) for identity in identities
+            ]
+            return await self._fetch(self._identity_filter(written, elements))
+
+    async def _update_returning(
+        self, values: Values, *args: _ColumnExpressionArgument[bool], **kwargs: Any
+    ) -> ScalarResult[Model]:
+        if self.qb.supports(Option.RETURNING):
+            statement = self.update(values, return_results=True)
+            return await statement.filter(*args, **kwargs).scalars()
+        return await self._write_returning(self.update(values).filter(*args, **kwargs))
+
+    async def _delete_returning(
+        self, *args: _ColumnExpressionArgument[bool], **kwargs: Any
+    ) -> ScalarResult[Model]:
+        if self.qb.supports(Option.RETURNING):
+            statement = self.delete(return_results=True)
+            return await statement.filter(*args, **kwargs).scalars()
+        return await self._write_returning(self.delete().filter(*args, **kwargs))
+
     async def create_or_update(self, **kwargs: Any) -> Model:
-        return await self.upsert(kwargs, return_results=True).one()
+        result = await self._insert_returning([kwargs], do="update")
+        return result.one()
 
     async def get_or_create(
         self, defaults: SingleValue | None = None, **kwargs: Any
     ) -> Model:
         async with self.session():
             values = {**(defaults or {}), **kwargs}
-            obj = await self.insert(
-                values, return_results=True, ignore_conflicts=True
-            ).one_or_none()
-            if obj is None:
-                obj = await self.select().filter(**kwargs).one()
-            return obj
+            result = await self._insert_returning([values], do="ignore")
+            created = result.one_or_none()
+            if created is not None:
+                return created
+            return await self.select().filter(**kwargs).one()
 
     async def create(self, **kwargs: Any) -> Model | None:
-        return await self.insert(
-            kwargs, return_results=True, ignore_conflicts=True
-        ).one_or_none()
+        result = await self._insert_returning([kwargs], do="ignore")
+        return result.one_or_none()
 
     async def remove(
         self, *args: _ColumnExpressionArgument[bool], **kwargs: Any
@@ -387,25 +528,20 @@ class SQLAlchemyRepository(Generic[Model]):
     async def delete_one(
         self, *args: _ColumnExpressionArgument[bool], **kwargs: Any
     ) -> Model | None:
-        return (
-            await self.delete(return_results=True).filter(*args, **kwargs).one_or_none()
-        )
+        result = await self._delete_returning(*args, **kwargs)
+        return result.one_or_none()
 
     async def update_one(
         self, values: SingleValue, *args: _ColumnExpressionArgument[bool], **kwargs: Any
     ) -> Model | None:
-        return (
-            await self.update(values, return_results=True)
-            .filter(*args, **kwargs)
-            .one_or_none()
-        )
+        result = await self._update_returning(values, *args, **kwargs)
+        return result.one_or_none()
 
     async def update_many(
         self, values: SingleValue, *args: _ColumnExpressionArgument[bool], **kwargs: Any
     ) -> Sequence[Model]:
-        return (
-            await self.update(values, return_results=True).filter(*args, **kwargs).all()
-        )
+        result = await self._update_returning(values, *args, **kwargs)
+        return result.all()
 
     async def delete_many(
         self, *args: _ColumnExpressionArgument[bool], **kwargs: Any
@@ -442,11 +578,10 @@ class SQLAlchemyRepository(Generic[Model]):
         return_results: bool = False,
         **options: Unpack[OnConflictOptions],
     ) -> Sequence[Model] | Result:
-        q = self.upsert(values, return_results=return_results, **options)
         if return_results:
-            return await q.all()
-
-        return await q.execute()
+            result = await self._insert_returning(values, do="update", **options)
+            return result.all()
+        return await self.upsert(values, **options).execute()
 
     @overload
     async def bulk_create(
@@ -474,15 +609,14 @@ class SQLAlchemyRepository(Generic[Model]):
         return_results: bool = False,
         **options: Unpack[OnConflictOptions],
     ) -> Sequence[Model] | None:
-        q = self.insert(
-            values,
-            ignore_conflicts=ignore_conflicts,
-            return_results=return_results,
-            **options,
-        )
         if return_results:
-            return await q.all()
-        await q.execute()
+            result = await self._insert_returning(
+                values, do="ignore" if ignore_conflicts else None, **options
+            )
+            return result.all()
+        await self.insert(
+            values, ignore_conflicts=ignore_conflicts, **options
+        ).execute()
         return None
 
     async def create_many(
@@ -691,11 +825,10 @@ class SoftDeleteRepository(SQLAlchemyRepository[SoftDeleteModel], abstract=True)
         """
         async with self.session():
             values = {**(defaults or {}), **kwargs}
-            obj = await self.insert(
-                values, return_results=True, ignore_conflicts=True
-            ).one_or_none()
-            if obj is not None:
-                return obj
+            result = await self._insert_returning([values], do="ignore")
+            created = result.one_or_none()
+            if created is not None:
+                return created
             obj = await self.select().filter(**kwargs).one_or_none()
             if obj is None:
                 msg = (

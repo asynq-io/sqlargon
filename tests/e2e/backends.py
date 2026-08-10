@@ -96,6 +96,8 @@ class Backend:
     server_side_uuid: bool
     skip_locked: bool
     json_key_operators: bool
+    #: an upsert may leave a column of the conflict set out of its values
+    partial_upsert: bool = True
     is_mariadb: bool = False
 
     @property
@@ -144,6 +146,9 @@ BACKENDS: dict[str, Backend] = {
         server_side_uuid=True,
         skip_locked=True,
         json_key_operators=True,
+        # 8.0.19+ names the conflicting row with an alias exposing only the
+        # columns the insert names, so an omitted one cannot be assigned
+        partial_upsert=False,
     ),
     "mariadb": Backend(
         name="mariadb",

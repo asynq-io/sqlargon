@@ -147,7 +147,6 @@ async def test_transaction_rolls_back_on_error(users: UserRepository):
     assert await users.count() == 0
 
 
-@pytest.mark.usefixtures("needs_insert_returning")
 async def test_create_returns_the_inserted_row(users: UserRepository):
     user = await users.create(name="John", last_name="Doe")
     assert user is not None
@@ -156,14 +155,13 @@ async def test_create_returns_the_inserted_row(users: UserRepository):
     assert user.created_at == user.updated_at
 
 
-@pytest.mark.usefixtures("needs_insert_returning")
 async def test_create_returns_none_on_conflict(users: UserRepository):
     user_id = uuid4()
     assert await users.create(id=user_id, name="John") is not None
     assert await users.create(id=user_id, name="John") is None
 
 
-@pytest.mark.usefixtures("needs_insert_returning")
+@pytest.mark.usefixtures("needs_partial_upsert")
 async def test_create_or_update_is_idempotent(users: UserRepository):
     user_id = uuid4()
     first = await users.create_or_update(id=user_id, name="John")
@@ -173,7 +171,6 @@ async def test_create_or_update_is_idempotent(users: UserRepository):
     assert await users.count() == 1
 
 
-@pytest.mark.usefixtures("needs_insert_returning")
 async def test_on_conflict_exclude_set_keeps_the_stored_column():
     repository = ExcludingUserRepository()
     user = await repository.create_or_update(id=uuid4(), name="John", score=1)
@@ -182,7 +179,6 @@ async def test_on_conflict_exclude_set_keeps_the_stored_column():
     assert updated.score == 1
 
 
-@pytest.mark.usefixtures("needs_insert_returning")
 async def test_get_or_create():
     repository = UserByNameRepository()
     created = await repository.get_or_create({"score": 5}, name="John")
@@ -191,13 +187,12 @@ async def test_get_or_create():
     assert existing.score == 5
 
 
-@pytest.mark.usefixtures("needs_insert_returning")
 async def test_create_many_returns_every_row(users: UserRepository):
     created = await users.create_many([{"name": name} for name in NAMES])
     assert sorted(user.name for user in created) == sorted(NAMES)
 
 
-@pytest.mark.usefixtures("needs_insert_returning")
+@pytest.mark.usefixtures("needs_partial_upsert")
 async def test_bulk_create_or_update_returns_rows(users: UserRepository):
     await seed(users, *NAMES)
     rows = await users.list()
@@ -208,7 +203,6 @@ async def test_bulk_create_or_update_returns_rows(users: UserRepository):
     assert {row.score for row in updated} == {8}
 
 
-@pytest.mark.usefixtures("needs_update_returning")
 async def test_update_one_returns_the_updated_row(users: UserRepository):
     await seed(users, "John")
     updated = await users.update_one({"score": 4}, User.name == "John")
@@ -216,14 +210,12 @@ async def test_update_one_returns_the_updated_row(users: UserRepository):
     assert updated.score == 4
 
 
-@pytest.mark.usefixtures("needs_update_returning")
 async def test_update_many_returns_every_updated_row(users: UserRepository):
     await seed(users, *NAMES)
     updated = await users.update_many({"score": 2}, User.name.in_(NAMES[:2]))
     assert len(updated) == 2
 
 
-@pytest.mark.usefixtures("needs_delete_returning")
 async def test_delete_one_returns_the_deleted_row(users: UserRepository):
     await seed(users, "John")
     deleted = await users.delete_one(User.name == "John")
@@ -239,7 +231,6 @@ async def test_get_chunk_for_update_removes_the_chunk(users: UserRepository):
     assert await users.count() == 1
 
 
-@pytest.mark.usefixtures("needs_update_returning")
 async def test_get_chunk_for_update_applies_values(users: UserRepository):
     await seed(users, *NAMES)
     async with users.get_chunk_for_update({"score": 6}, limit=2) as chunk:
@@ -247,22 +238,24 @@ async def test_get_chunk_for_update_applies_values(users: UserRepository):
     assert await users.count(User.score == 6) == 2
 
 
-async def test_create_reports_a_missing_insert_returning(
+async def test_written_rows_come_back_without_a_returning_clause(
     users: UserRepository, backend: Backend
 ):
-    """The MySQL query builder claims RETURNING, but MySQL has none."""
-    if backend.insert_returning:
-        pytest.skip(f"{backend.name} supports INSERT ... RETURNING")
-    with pytest.raises(Exception, match=r"(?i)returning|syntax"):
-        await users.create(name="John")
+    """One create/update/delete round trip over the re-read fallback.
 
-
-async def test_update_one_reports_a_missing_update_returning(
-    users: UserRepository, backend: Backend
-):
-    """MariaDB returns rows from an INSERT and a DELETE, but not an UPDATE."""
-    if backend.update_returning:
-        pytest.skip(f"{backend.name} supports UPDATE ... RETURNING")
-    await seed(users, "John")
-    with pytest.raises(Exception, match=r"(?i)returning|syntax"):
-        await users.update_one({"score": 4}, User.name == "John")
+    The assertions above cover the same methods on every backend; this one
+    names the backends that reach them without a RETURNING clause, so the
+    fallback is exercised deliberately rather than only in passing.
+    """
+    if backend.dialect != "mysql":
+        pytest.skip(f"{backend.name} writes and returns in one statement")
+    created = await users.create(name="John")
+    assert created is not None
+    updated = await users.update_one({"score": 4}, User.name == "John")
+    assert updated is not None
+    assert updated.id == created.id
+    assert updated.score == 4
+    deleted = await users.delete_one(User.name == "John")
+    assert deleted is not None
+    assert deleted.id == created.id
+    assert await users.count() == 0

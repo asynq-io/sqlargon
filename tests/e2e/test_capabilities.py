@@ -29,33 +29,58 @@ def test_locks_claim_matches_the_backend(db: Database, backend: Backend):
 
 
 def test_returning_claim_matches_the_backend(db: Database, backend: Backend):
-    """Only PostgreSQL and SQLite honour the claim for every statement."""
-    assert db.query_builder.supports(Option.RETURNING) is True
-    assert backend.insert_returning is not (backend.name == "mysql")
-    assert backend.update_returning is not backend.is_mysql_family
-    assert backend.delete_returning is not (backend.name == "mysql")
+    """The claim is made only where every statement can carry the clause.
+
+    MariaDB returns rows from an INSERT and a DELETE but never from an
+    UPDATE, and it reaches sqlargon as the same ``mysql`` dialect as MySQL,
+    which has no RETURNING at all -- so the MySQL family claims none and the
+    repository re-reads what it wrote instead.
+    """
+    every_statement = (
+        backend.insert_returning
+        and backend.update_returning
+        and backend.delete_returning
+    )
+    assert db.query_builder.supports(Option.RETURNING) is every_statement
+    assert every_statement is not backend.is_mysql_family
 
 
-async def test_insert_returning_against_the_server(
-    users: UserRepository, backend: Backend
-):
+async def test_insert_returning_against_the_server(db: Database, backend: Backend):
+    """A bare INSERT ... RETURNING, bypassing the repository fallback."""
+    statement = sa.insert(User).values(name="John").returning(User)
     if backend.insert_returning:
-        assert await users.create(name="John") is not None
+        assert (await db.execute(statement)).scalars().one() is not None
     else:
         with pytest.raises(Exception, match=r"(?i)returning|syntax"):
-            await users.create(name="John")
+            await db.execute(statement)
 
 
 async def test_delete_returning_against_the_server(
-    users: UserRepository, backend: Backend
+    db: Database, users: UserRepository, backend: Backend
 ):
+    """A bare DELETE ... RETURNING, bypassing the repository fallback."""
     await users.bulk_create([{"name": "John"}], return_results=False)
+    statement = sa.delete(User).where(User.name == "John").returning(User)
     if backend.delete_returning:
-        deleted = await users.delete_one(User.name == "John")
-        assert deleted is not None
+        assert (await db.execute(statement)).scalars().one() is not None
     else:
         with pytest.raises(Exception, match=r"(?i)returning|syntax"):
-            await users.delete_one(User.name == "John")
+            await db.execute(statement)
+
+
+async def test_update_returning_against_the_server(
+    db: Database, users: UserRepository, backend: Backend
+):
+    """A bare UPDATE ... RETURNING, which no MySQL family server accepts."""
+    await users.bulk_create([{"name": "John"}], return_results=False)
+    statement = (
+        sa.update(User).where(User.name == "John").values(score=4).returning(User)
+    )
+    if backend.update_returning:
+        assert (await db.execute(statement)).scalars().one() is not None
+    else:
+        with pytest.raises(Exception, match=r"(?i)returning|syntax"):
+            await db.execute(statement)
 
 
 def test_excluded_row_reference(db: Database, backend: Backend):
@@ -83,7 +108,7 @@ async def test_upsert_of_a_partial_row(users: UserRepository, backend: Backend):
     assert user is not None
     statement = users.upsert({"id": user.id, "name": "John", "score": 7})
 
-    if backend.name == "mysql":
+    if not backend.partial_upsert:
         with pytest.raises(OperationalError, match="last_name"):
             await statement.execute()
         return

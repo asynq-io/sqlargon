@@ -268,7 +268,7 @@ def test_postgresql_lock_unlock(postgresql_qb):
 
 
 def test_mysql_query_builder_options(mysql_qb):
-    assert mysql_qb.supports(Option.RETURNING)
+    assert not mysql_qb.supports(Option.RETURNING)
     assert mysql_qb.supports(Option.CONFLICTS)
     assert mysql_qb.supports(Option.LOCKS)
 
