@@ -111,21 +111,9 @@ async def db(
 
 
 @pytest.fixture
-def needs_insert_returning(backend: Backend) -> None:
-    if not backend.insert_returning:
-        pytest.skip(f"{backend.name} has no INSERT ... RETURNING")
-
-
-@pytest.fixture
-def needs_update_returning(backend: Backend) -> None:
-    if not backend.update_returning:
-        pytest.skip(f"{backend.name} has no UPDATE ... RETURNING")
-
-
-@pytest.fixture
-def needs_delete_returning(backend: Backend) -> None:
-    if not backend.delete_returning:
-        pytest.skip(f"{backend.name} has no DELETE ... RETURNING")
+def needs_partial_upsert(backend: Backend) -> None:
+    if not backend.partial_upsert:
+        pytest.skip(f"{backend.name} rejects an upsert leaving a set column out")
 
 
 @pytest.fixture

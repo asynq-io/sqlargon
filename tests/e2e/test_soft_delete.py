@@ -63,7 +63,6 @@ async def test_update_leaves_tombstoned_rows_alone(soft_users: SoftUserRepositor
     assert [row.name for row in await soft_users.only_deleted().all()] == ["John"]
 
 
-@pytest.mark.usefixtures("needs_update_returning")
 async def test_restore_clears_the_tombstone(soft_users: SoftUserRepository):
     await seed(soft_users, *NAMES)
     await soft_users.remove(SoftUser.name == "John")
@@ -72,7 +71,6 @@ async def test_restore_clears_the_tombstone(soft_users: SoftUserRepository):
     assert await soft_users.count() == len(NAMES)
 
 
-@pytest.mark.usefixtures("needs_insert_returning")
 async def test_upsert_does_not_resurrect_a_deleted_row(
     soft_users: SoftUserRepository,
 ):
@@ -82,7 +80,6 @@ async def test_upsert_does_not_resurrect_a_deleted_row(
     assert await soft_users.count() == 0
 
 
-@pytest.mark.usefixtures("needs_insert_returning")
 async def test_get_or_create_refuses_to_reuse_a_deleted_row():
     repository = SoftUserByNameRepository()
     created = await repository.get_or_create(name="John")

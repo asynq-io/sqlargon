@@ -73,7 +73,7 @@ def test_get_query_builder_is_cached():
     ("dialect", "expected"),
     [
         ("postgresql", Option.RETURNING | Option.CONFLICTS | Option.LOCKS),
-        ("mysql", Option.RETURNING | Option.CONFLICTS | Option.LOCKS),
+        ("mysql", Option.CONFLICTS | Option.LOCKS),
         ("oracle", Option.NONE),
     ],
 )
