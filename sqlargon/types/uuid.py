@@ -70,15 +70,23 @@ def _generate_uuidv7_postgresql(
 
 @compiles(GenerateUUID, "mysql")
 def _generate_uuid_mysql(_element: GenerateUUID, _compiler: Any, **_kwargs: Any) -> str:
+    """
+    Generates a random UUID v4 in MySQL.
+
+    Wrapped in parentheses, since MySQL only accepts an expression as a column
+    default in the ``DEFAULT (expr)`` form, and using the ``MOD`` operator
+    rather than ``%``, which the pyformat paramstyle of the MySQL drivers
+    would read as a parameter placeholder.
+    """
     return (
-        "LOWER(CONCAT("
+        "(LOWER(CONCAT("
         "HEX(RANDOM_BYTES(4)), '-',"
         "HEX(RANDOM_BYTES(2)), '-4',"
         "SUBSTR(HEX(RANDOM_BYTES(2)), 2), '-',"
-        "ELT((CONV(SUBSTR(HEX(RANDOM_BYTES(1)), 2, 1), 16, 10) % 4) + 1, '8', '9', 'a', 'b'),"
+        "ELT((CONV(SUBSTR(HEX(RANDOM_BYTES(1)), 2, 1), 16, 10) MOD 4) + 1, '8', '9', 'a', 'b'),"
         "SUBSTR(HEX(RANDOM_BYTES(2)), 2), '-',"
         "HEX(RANDOM_BYTES(6))"
-        "))"
+        ")))"
     )
 
 
@@ -89,17 +97,21 @@ def _generate_uuidv7_mysql(
     """
     Generates a UUID v7 in MySQL using the unix timestamp in milliseconds as the
     time component, and cryptographically random bytes for the random component.
-    Requires MySQL 5.6.1+ (RANDOM_BYTES) and MySQL 5.6.4+ (NOW(3) precision).
+    Requires MySQL 5.6.1+ (RANDOM_BYTES) and MySQL 5.6.4+ (NOW(3) precision),
+    and MySQL 8.0.13+ to use it as a column default.
+
+    Parenthesised and using ``MOD`` for the same reasons as
+    :func:`_generate_uuid_mysql`.
     """
     return (
-        "LOWER(CONCAT("
+        "(LOWER(CONCAT("
         "LPAD(HEX(FLOOR(UNIX_TIMESTAMP(NOW(3)) * 1000) DIV 65536), 8, '0'), '-',"
         "LPAD(HEX(FLOOR(UNIX_TIMESTAMP(NOW(3)) * 1000) MOD 65536), 4, '0'), '-7',"
         "SUBSTR(HEX(RANDOM_BYTES(2)), 2), '-',"
-        "ELT((CONV(SUBSTR(HEX(RANDOM_BYTES(1)), 2, 1), 16, 10) % 4) + 1, '8', '9', 'a', 'b'),"
+        "ELT((CONV(SUBSTR(HEX(RANDOM_BYTES(1)), 2, 1), 16, 10) MOD 4) + 1, '8', '9', 'a', 'b'),"
         "SUBSTR(HEX(RANDOM_BYTES(2)), 2), '-',"
         "HEX(RANDOM_BYTES(6))"
-        "))"
+        ")))"
     )
 
 

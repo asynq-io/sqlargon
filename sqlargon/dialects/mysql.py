@@ -14,8 +14,14 @@ if TYPE_CHECKING:
     from sqlargon.typing import OnConflict, Values
 
 
+# MySQL reads a negative GET_LOCK timeout as an infinite wait, while MariaDB
+# rejects it and answers NULL without ever taking the lock -- so wait a year,
+# the longest value both accept, rather than forever
+LOCK_TIMEOUT_SECONDS = 31536000
+
+
 class MysqlQueryBuilder(QueryBuilder):
-    supported_options = Option.RETURNING | Option.CONFLICTS | Option.LOCKS
+    supported_options = Option.CONFLICTS | Option.LOCKS
 
     def _insert(
         self,
@@ -38,7 +44,9 @@ class MysqlQueryBuilder(QueryBuilder):
         return query
 
     def lock(self, key: str) -> sa.TextClause:
-        return sa.text("SELECT GET_LOCK(:key, -1)").bindparams(key=key)
+        return sa.text("SELECT GET_LOCK(:key, :timeout)").bindparams(
+            key=key, timeout=LOCK_TIMEOUT_SECONDS
+        )
 
     def unlock(self, key: str) -> sa.TextClause:
         return sa.text("SELECT RELEASE_LOCK(:key)").bindparams(key=key)

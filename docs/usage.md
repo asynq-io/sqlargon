@@ -151,6 +151,12 @@ filters (`filter_by`); both can be combined.
 Every one of these calls runs in its own transaction, committed when it returns — group
 them with [`atomic`](#transactions) when they must succeed or fail together.
 
+The methods that hand a model back read it off a `RETURNING` clause where the dialect has
+one, and re-read the written rows in a second statement — within the same transaction —
+where it does not, as on MySQL and MariaDB. See
+[dialects](reference/dialects.md#capabilities) for what that costs and when it cannot be
+done.
+
 ## Bulk operations
 
 ```python
