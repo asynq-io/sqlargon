@@ -8,7 +8,11 @@ Generated from the source. See [Usage](../usage.md) for a narrative introduction
 
 ::: sqlargon.repository.SoftDeleteRepository
 
+::: sqlargon.repository.VersionedRepository
+
 ::: sqlargon.repository.DeletedRowExistsError
+
+::: sqlargon.repository.ConcurrentModificationError
 
 ::: sqlargon.functools.atomic
 

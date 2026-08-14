@@ -3,12 +3,24 @@ from importlib.metadata import version
 from .cluster import AnyDatabase, DatabaseCluster
 from .database import BaseDatabase, Database, ReadOnlyDatabase, ReadOnlyError
 from .functools import atomic
-from .orm import Base, Model, ORMModel, SoftDeleteBase, SoftDeleteModel
+from .mixins import UUIDVersionedMixin, VersionedMixin, XminVersionedMixin
+from .orm import (
+    Base,
+    Model,
+    ORMModel,
+    SoftDeleteBase,
+    SoftDeleteModel,
+    VersionedBase,
+    VersionedModel,
+    XminVersionedBase,
+)
 from .registry import get_default_database, set_default_database
 from .repository import (
+    ConcurrentModificationError,
     DeletedRowExistsError,
     SoftDeleteRepository,
     SQLAlchemyRepository,
+    VersionedRepository,
 )
 from .routing import (
     DefaultRouter,
@@ -32,6 +44,7 @@ __all__ = [
     "AnyDatabase",
     "Base",
     "BaseDatabase",
+    "ConcurrentModificationError",
     "Database",
     "DatabaseCluster",
     "DefaultRouter",
@@ -52,6 +65,13 @@ __all__ = [
     "SoftDeleteBase",
     "SoftDeleteModel",
     "SoftDeleteRepository",
+    "UUIDVersionedMixin",
+    "VersionedBase",
+    "VersionedMixin",
+    "VersionedModel",
+    "VersionedRepository",
+    "XminVersionedBase",
+    "XminVersionedMixin",
     "__version__",
     "atomic",
     "get_default_database",

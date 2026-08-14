@@ -141,6 +141,9 @@ Both accept `sa_column_type=` to store in something other than `JSON` (e.g. `sa.
 | `UUIDV7ModelMixin` | `id` — `GUID` primary key, `uuid7` client default, `GenerateUUIDV7()` server default | |
 | `CreatedUpdatedMixin` | `created_at`, `updated_at` — `Timestamp`, `now()` server defaults, `onupdate` | `is_new` hybrid property |
 | `SoftDeleteMixin` | `tombstone` — boolean, defaults to false | `not_deleted` and `is_deleted` hybrid properties |
+| `VersionedMixin` | *(abstract marker — no columns)* | |
+| `UUIDVersionedMixin` | `version_id` — `GUID`, `uuid4` default, `GenerateUUID()` server default | `__mapper_args__` with `version_id_col` + UUID generator |
+| `XminVersionedMixin` | `xmin` — PostgreSQL system column, `String`, `system=True`, `FetchedValue()` | `__mapper_args__` with `version_id_col` + `version_id_generator=False` |
 
 ```python
 from sqlargon.mixins import CreatedUpdatedMixin, SoftDeleteMixin, UUIDV7ModelMixin
@@ -181,3 +184,32 @@ class User(UUIDV7ModelMixin, CreatedUpdatedMixin, SoftDeleteBase):
 ```
 
 `SoftDeleteModel` is the matching type variable, bound to `SoftDeleteBase`.
+
+`VersionedMixin` is an abstract marker — use one of its concrete subclasses:
+
+- `UUIDVersionedMixin` — backend-agnostic, a `GUID` version column with a fresh UUID on
+  every update. `VersionedBase` combines it with `Base`:
+
+```python
+from sqlargon import VersionedBase
+
+
+class User(UUIDV7ModelMixin, VersionedBase):
+    name: Mapped[str] = mapped_column(sa.Unicode(255))
+```
+
+- `XminVersionedMixin` — PostgreSQL only, uses the `xmin` system column (server-managed,
+  changes on every UPDATE). `XminVersionedBase` combines it with `Base`:
+
+```python
+from sqlargon import XminVersionedBase
+
+
+class User(UUIDV7ModelMixin, XminVersionedBase):
+    name: Mapped[str] = mapped_column(sa.Unicode(255))
+```
+
+Both set `__mapper_args__` with `version_id_col`, enabling SQLAlchemy's ORM-level
+versioning when using `AsyncSession` directly. `VersionedModel` is the matching type
+variable, bound to `VersionedBase`. See [Versioned models](../usage.md#versioned-models)
+for the repository API.

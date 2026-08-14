@@ -13,7 +13,15 @@ import sqlalchemy as sa
 from pydantic import BaseModel
 from sqlalchemy.orm import Mapped, mapped_column
 
-from sqlargon import Base, SoftDeleteBase, SoftDeleteRepository, SQLAlchemyRepository
+from sqlargon import (
+    Base,
+    SoftDeleteBase,
+    SoftDeleteRepository,
+    SQLAlchemyRepository,
+    VersionedBase,
+    VersionedRepository,
+    XminVersionedBase,
+)
 from sqlargon.mixins import CreatedUpdatedMixin, UUIDModelMixin
 from sqlargon.types import GUID, JSON, GenerateUUID, GenerateUUIDV7, Timestamp, now
 from sqlargon.types.pydantic import Pydantic
@@ -108,13 +116,38 @@ class SoftUserByNameRepository(SoftUserRepository):
         return {"index_elements": {"name"}, "set_": {"name"}}
 
 
+class VersionedUser(UUIDModelMixin, VersionedBase):
+    __tablename__ = "e2e_versioned_user"
+
+    name: Mapped[str] = mapped_column(sa.Unicode(64), unique=True)
+
+
+class XminUser(UUIDModelMixin, XminVersionedBase):
+    """PostgreSQL-only model versioned via the ``xmin`` system column."""
+
+    __tablename__ = "e2e_xmin_user"
+
+    name: Mapped[str] = mapped_column(sa.Unicode(64), unique=True)
+
+
+class VersionedUserRepository(VersionedRepository[VersionedUser]):
+    default_order_by = VersionedUser.name
+
+
+class XminUserRepository(VersionedRepository[XminUser]):  # type: ignore[type-var]
+    default_order_by = XminUser.name
+
+
 def _tables(*models: type[Base]) -> tuple[sa.Table, ...]:
     return tuple(Base.metadata.tables[model.__tablename__] for model in models)
 
 
 #: Tables every backend can hold; the only ones the e2e suite creates.
-TABLES: tuple[sa.Table, ...] = _tables(User, Document, SoftUser)
+TABLES: tuple[sa.Table, ...] = _tables(User, Document, SoftUser, VersionedUser)
 
 #: Tables whose DDL carries a server side UUID default, which not every
 #: backend accepts -- see :attr:`~tests.e2e.backends.Backend.server_side_uuid`.
 SERVER_DEFAULT_TABLES: tuple[sa.Table, ...] = _tables(ServerDefaults)
+
+#: Tables that only PostgreSQL can hold (the ``xmin`` system column).
+XMIN_TABLES: tuple[sa.Table, ...] = _tables(XminUser)
