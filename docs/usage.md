@@ -289,6 +289,114 @@ class AuditedRepository(SoftDeleteRepository[SoftDeleteModel], abstract=True):
 class UserRepository(AuditedRepository[User]): ...
 ```
 
+## Versioned models
+
+`VersionedRepository` adds optimistic concurrency control: every update bumps a version
+column, and `update_if_match` / `delete_if_match` check that the row's version matches
+the one the caller loaded — if it does not, the row was modified by a concurrent
+transaction and the call returns `None` (or raises `ConcurrentModificationError`).
+
+Two versioning strategies are provided:
+
+- **`UUIDVersionedMixin`** (backend-agnostic) — a `GUID` version column with a fresh UUID
+  on every update. Declare the model on `VersionedBase`, which combines the mixin with
+  `Base`:
+
+```python
+from sqlargon import VersionedBase, VersionedRepository
+from sqlargon.mixins import UUIDModelMixin
+
+
+class User(UUIDModelMixin, VersionedBase):
+    name: Mapped[str] = mapped_column(sa.Unicode(255))
+
+
+class UserRepository(VersionedRepository[User]): ...
+
+
+users = UserRepository()
+```
+
+- **`XminVersionedMixin`** (PostgreSQL only) — uses PostgreSQL's `xmin` system column,
+  which the server changes automatically on every UPDATE. Declare the model on
+  `XminVersionedBase`:
+
+```python
+from sqlargon import XminVersionedBase
+
+
+class User(UUIDModelMixin, XminVersionedBase):
+    name: Mapped[str] = mapped_column(sa.Unicode(255))
+```
+
+The same `VersionedRepository` works with both strategies — it reads the version column
+and generator from the SQLAlchemy mapper, so for `xmin` models it skips the client-side
+increment (the server does it) and only adds the `WHERE` guard.
+
+### Auto-increment
+
+Every `update_one`, `update_many` and `bulk_update` call through a `VersionedRepository`
+automatically sets a new version on the matched rows:
+
+```python
+user = await users.get(id=user_id)
+# user.version_id == "abc-123..."
+
+updated = await users.update_one({"name": "Jane"}, User.id == user_id)
+# updated.version_id == "def-456..."  (a fresh UUID)
+```
+
+The version column is excluded from the default `ON CONFLICT DO UPDATE` set, so an upsert
+(`create_or_update`, `bulk_create_or_update`) never silently clobbers a version.
+
+### Optimistic concurrency check
+
+`update_if_match` and `delete_if_match` add `WHERE version_col = expected_version` to the
+statement. If the row's version no longer matches, zero rows are touched and the call
+returns `None`:
+
+```python
+user = await users.get(id=user_id)
+
+updated = await users.update_if_match(
+    {"name": "Jane"},
+    User.id == user_id,
+    expected_version=user.version_id,
+)
+if updated is None:
+    # someone else modified the row first — reload and retry
+```
+
+Pass `raise_on_mismatch=True` to raise `ConcurrentModificationError` instead of returning
+`None`:
+
+```python
+updated = await users.update_if_match(
+    {"name": "Jane"},
+    User.id == user_id,
+    expected_version=user.version_id,
+    raise_on_mismatch=True,
+)
+```
+
+`delete_if_match` works the same way:
+
+```python
+deleted = await users.delete_if_match(
+    User.id == user_id,
+    expected_version=user.version_id,
+)
+```
+
+You can also add a manual `Model.version_id == expected` filter to any regular method —
+`update_one` will return `None` when the version does not match, without the convenience
+of `update_if_match`'s `raise_on_mismatch` flag.
+
+`VersionedRepository` is generic over `VersionedModel`, a type variable bound to
+`VersionedBase`. `XminVersionedBase` models work at runtime (the looser `VersionedMixin`
+is enough) but need a `# type: ignore[type-var]` for the static bound, just as
+`SoftDeleteMixin`-by-hand models do for `SoftDeleteModel`.
+
 ## Building queries
 
 `select`, `insert`, `upsert`, `update`, `delete`, `where`/`filter`, `join` and `load` return

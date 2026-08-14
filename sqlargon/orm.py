@@ -4,7 +4,11 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from sqlalchemy import MetaData
 from sqlalchemy.orm import DeclarativeBase, declared_attr
 
-from .mixins import SoftDeleteMixin
+from .mixins import (
+    SoftDeleteMixin,
+    UUIDVersionedMixin,
+    XminVersionedMixin,
+)
 
 camel_to_snake = re.compile(r"(?<!^)(?=[A-Z])")
 
@@ -64,3 +68,30 @@ class SoftDeleteBase(SoftDeleteMixin, Base):
 
 
 SoftDeleteModel = TypeVar("SoftDeleteModel", bound=SoftDeleteBase)
+
+
+class VersionedBase(UUIDVersionedMixin, Base):
+    """Declarative base for models versioned with a UUID column.
+
+    Inherit it instead of combining :class:`UUIDVersionedMixin` with
+    :class:`~sqlargon.orm.Base` by hand, so
+    :class:`~sqlargon.repository.VersionedRepository` can type its model::
+
+        class User(UUIDModelMixin, VersionedBase):
+            name: Mapped[str] = mapped_column(sa.Unicode(255))
+    """
+
+    __abstract__ = True
+
+
+class XminVersionedBase(XminVersionedMixin, Base):
+    """Declarative base for PostgreSQL models versioned via ``xmin``.
+
+    Only works on PostgreSQL — the ``xmin`` system column does not exist
+    on other backends.
+    """
+
+    __abstract__ = True
+
+
+VersionedModel = TypeVar("VersionedModel", bound=VersionedBase)

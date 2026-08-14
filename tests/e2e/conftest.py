@@ -20,9 +20,12 @@ from .backends import Backend, parse_backends
 from .models import (
     SERVER_DEFAULT_TABLES,
     TABLES,
+    XMIN_TABLES,
     DocumentRepository,
     SoftUserRepository,
     UserRepository,
+    VersionedUserRepository,
+    XminUserRepository,
 )
 
 if TYPE_CHECKING:
@@ -64,9 +67,12 @@ def database_url(
 @pytest.fixture(scope="session")
 def tables(backend: Backend) -> tuple[sa.Table, ...]:
     """The e2e tables this backend can hold."""
+    result = TABLES
     if backend.server_side_uuid:
-        return TABLES + SERVER_DEFAULT_TABLES
-    return TABLES
+        result = result + SERVER_DEFAULT_TABLES
+    if backend.dialect == "postgresql":
+        result = result + XMIN_TABLES
+    return result
 
 
 @pytest.fixture(scope="session")
@@ -147,6 +153,12 @@ def needs_json_key_operators(backend: Backend) -> None:
 
 
 @pytest.fixture
+def needs_xmin(backend: Backend) -> None:
+    if backend.dialect != "postgresql":
+        pytest.skip(f"{backend.name} has no xmin system column")
+
+
+@pytest.fixture
 def users() -> UserRepository:
     return UserRepository()
 
@@ -159,3 +171,13 @@ def documents() -> DocumentRepository:
 @pytest.fixture
 def soft_users() -> SoftUserRepository:
     return SoftUserRepository()
+
+
+@pytest.fixture
+def versioned_users() -> VersionedUserRepository:
+    return VersionedUserRepository()
+
+
+@pytest.fixture
+def xmin_users() -> XminUserRepository:
+    return XminUserRepository()
