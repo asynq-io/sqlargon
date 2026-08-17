@@ -24,6 +24,7 @@ nav:
   - "Database Routing": routing.md
   - "Pagination": pagination.md
   - "Cron": cron.md
+  - "Outbox": outbox.md
   - "Examples": examples.md
   - "Reference":
     - "Column Types & Mixins": reference/types.md

@@ -3,14 +3,15 @@
 Every test runs once per selected backend. A container is started once per
 session and shared, while the :class:`~sqlargon.Database` is per test: an
 engine's pool holds connections bound to the event loop that opened them, and
-pytest-asyncio gives each test a fresh loop.
+the anyio plugin gives each test a fresh loop.
 """
 
 from __future__ import annotations
 
-import asyncio
+from functools import partial
 from typing import TYPE_CHECKING
 
+import anyio
 import pytest
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -22,6 +23,7 @@ from .models import (
     TABLES,
     XMIN_TABLES,
     DocumentRepository,
+    OutboxUserRepository,
     SoftUserRepository,
     UserRepository,
     VersionedUserRepository,
@@ -41,7 +43,10 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     backends = parse_backends(metafunc.config.getoption("e2e_backends"))
     metafunc.parametrize(
         "backend",
-        backends,
+        [
+            pytest.param(backend, marks=pytest.mark.xdist_group(backend.name))
+            for backend in backends
+        ],
         ids=[backend.name for backend in backends],
         indirect=True,
         scope="session",
@@ -94,9 +99,9 @@ def schema(database_url: str, tables: tuple[sa.Table, ...]) -> Generator[None]:
         finally:
             await engine.dispose()
 
-    asyncio.run(run(create=True))
+    anyio.run(partial(run, create=True))
     yield
-    asyncio.run(run(create=False))
+    anyio.run(partial(run, create=False))
 
 
 @pytest.fixture(autouse=True)
@@ -181,3 +186,8 @@ def versioned_users() -> VersionedUserRepository:
 @pytest.fixture
 def xmin_users() -> XminUserRepository:
     return XminUserRepository()
+
+
+@pytest.fixture
+def outbox_users() -> OutboxUserRepository:
+    return OutboxUserRepository()

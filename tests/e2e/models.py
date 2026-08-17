@@ -23,6 +23,7 @@ from sqlargon import (
     XminVersionedBase,
 )
 from sqlargon.mixins import CreatedUpdatedMixin, UUIDModelMixin
+from sqlargon.outbox import OutboxConfig, OutboxEvent, OutboxRepository
 from sqlargon.types import GUID, JSON, GenerateUUID, GenerateUUIDV7, Timestamp, now
 from sqlargon.types.pydantic import Pydantic
 from sqlargon.typing import OnConflictOptions
@@ -138,12 +139,34 @@ class XminUserRepository(VersionedRepository[XminUser]):  # type: ignore[type-va
     default_order_by = XminUser.name
 
 
+class OutboxUser(UUIDModelMixin, CreatedUpdatedMixin, Base):
+    __tablename__ = "e2e_outbox_user"
+
+    name: Mapped[str] = mapped_column(sa.Unicode(64), unique=True)
+    password: Mapped[str | None] = mapped_column(sa.Unicode(64), nullable=True)
+    tenant_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True)
+
+
+class OutboxUserRepository(OutboxRepository[OutboxUser]):
+    default_order_by = OutboxUser.name
+
+    outbox = OutboxConfig(
+        topic="users",
+        type_prefix="user",
+        source="e2e",
+        exclude={"password", "tenant_id"},
+        attributes={"tenant_id": "tenant_id"},
+    )
+
+
 def _tables(*models: type[Base]) -> tuple[sa.Table, ...]:
     return tuple(Base.metadata.tables[model.__tablename__] for model in models)
 
 
 #: Tables every backend can hold; the only ones the e2e suite creates.
-TABLES: tuple[sa.Table, ...] = _tables(User, Document, SoftUser, VersionedUser)
+TABLES: tuple[sa.Table, ...] = _tables(
+    User, Document, SoftUser, VersionedUser, OutboxUser, OutboxEvent
+)
 
 #: Tables whose DDL carries a server side UUID default, which not every
 #: backend accepts -- see :attr:`~tests.e2e.backends.Backend.server_side_uuid`.
