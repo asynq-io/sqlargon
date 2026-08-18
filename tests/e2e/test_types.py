@@ -8,7 +8,14 @@ from sqlalchemy.exc import StatementError
 from sqlargon import Database
 
 from .backends import Backend
-from .models import Address, Document, DocumentRepository, ServerDefaults, User
+from .models import (
+    Address,
+    Document,
+    DocumentRepository,
+    ServerDefaults,
+    ServerDefaultsUUIDV7,
+    User,
+)
 
 WARSAW = timezone(timedelta(hours=2))
 
@@ -56,9 +63,18 @@ async def test_now_server_default_is_timezone_aware(db: Database):
 
 
 @pytest.mark.usefixtures("needs_server_side_uuid")
-async def test_server_side_uuid_defaults(db: Database, backend: Backend):
+async def test_server_side_uuid_defaults(db: Database):
     await db.execute(sa.insert(ServerDefaults))
     row = (await db.execute(sa.select(ServerDefaults))).scalars().one()
+    assert isinstance(row.id, UUID)
+    assert row.id.version == 4
+    assert row.created_at.tzinfo == timezone.utc
+
+
+@pytest.mark.usefixtures("needs_server_side_uuidv7")
+async def test_server_side_uuidv7_default(db: Database, backend: Backend):
+    await db.execute(sa.insert(ServerDefaultsUUIDV7))
+    row = (await db.execute(sa.select(ServerDefaultsUUIDV7))).scalars().one()
     assert isinstance(row.id, UUID)
     assert row.id.version == 4
     assert isinstance(row.uuid_v7, UUID)

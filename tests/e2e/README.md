@@ -5,10 +5,11 @@ the selected backends, so a failure names the backend it happened on:
 
 | backend    | provided by                      | dialect sqlargon sees |
 |------------|----------------------------------|-----------------------|
-| `sqlite`   | a file on disk (no container)    | `sqlite`              |
-| `postgres` | a `postgres:18-alpine` container | `postgresql`          |
-| `mysql`    | a `mysql:8.4` container          | `mysql`               |
-| `mariadb`  | a `mariadb:11.4` container       | `mysql`               |
+| `sqlite`    | a file on disk (no container)      | `sqlite`              |
+| `postgres`  | a `postgres:18-alpine` container   | `postgresql`          |
+| `postgres17`| a `postgres:17-alpine` container   | `postgresql`          |
+| `mysql`     | a `mysql:8.4` container            | `mysql`               |
+| `mariadb`   | a `mariadb:11.4` container         | `mysql`               |
 
 MySQL and MariaDB both run on InnoDB (asserted by `test_capabilities.py`) and
 both connect over `mysql+asyncmy://`, so both reach the MySQL query builder and
@@ -38,6 +39,7 @@ Images are overridable:
 
 ```bash
 SQLARGON_E2E_MARIADB_IMAGE=mariadb:10.11 pytest --e2e --e2e-backends=mariadb
+SQLARGON_E2E_POSTGRES_17_IMAGE=postgres:16-alpine pytest --e2e --e2e-backends=postgres17
 ```
 
 ## Layout
@@ -73,4 +75,7 @@ Known gaps:
 - The SQLite `has_any_key`/`has_all_keys` operators match JSON values, not
   object keys.
 - `GenerateUUIDV7` needs PostgreSQL 18 for `uuidv7()`, and falls back to a
-  random, v4 shaped value on SQLite.
+  random, v4 shaped value on SQLite. The `postgres17` backend runs the same
+  server without that column: the `server_side_uuidv7` capability is off, so
+  the `uuidv7()` table is not created and the test for it is skipped, pinning
+  that the rest of the suite still passes on a pre-18 server.

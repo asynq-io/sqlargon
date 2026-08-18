@@ -60,6 +60,24 @@ class ServerDefaults(Base):
     id: Mapped[UUID] = mapped_column(
         GUID(), primary_key=True, server_default=GenerateUUID()
     )
+    created_at: Mapped[datetime] = mapped_column(
+        Timestamp(), nullable=False, server_default=now()
+    )
+
+
+class ServerDefaultsUUIDV7(Base):
+    """A row filled by the server, plus a server side ``uuidv7()`` column.
+
+    ``uuidv7()`` is a PostgreSQL 18 builtin, so the DDL cannot run on a
+    PostgreSQL 17 server; the table is only created on backends that accept
+    it.
+    """
+
+    __tablename__ = "e2e_server_defaults_uuidv7"
+
+    id: Mapped[UUID] = mapped_column(
+        GUID(), primary_key=True, server_default=GenerateUUID()
+    )
     uuid_v7: Mapped[UUID] = mapped_column(
         GUID(), nullable=False, server_default=GenerateUUIDV7()
     )
@@ -118,3 +136,6 @@ TABLES: tuple[sa.Table, ...] = _tables(User, Document, SoftUser)
 #: Tables whose DDL carries a server side UUID default, which not every
 #: backend accepts -- see :attr:`~tests.e2e.backends.Backend.server_side_uuid`.
 SERVER_DEFAULT_TABLES: tuple[sa.Table, ...] = _tables(ServerDefaults)
+#: Tables whose DDL carries the server side ``uuidv7()`` default, a
+#: PostgreSQL 18 builtin the 17 backend and the MySQL family reject.
+UUIDV7_SERVER_DEFAULT_TABLES: tuple[sa.Table, ...] = _tables(ServerDefaultsUUIDV7)
