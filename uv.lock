@@ -27,6 +27,19 @@ wheels = [
 ]
 
 [[package]]
+name = "alembic-postgresql-enum"
+version = "1.10.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "alembic" },
+    { name = "sqlalchemy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/63/cf/b5147b926441e7cdc12f306465dac488ff22364b1467a09a5d43743b8cfc/alembic_postgresql_enum-1.10.0.tar.gz", hash = "sha256:ea23481de3d6a00d68d369f92a46ff4fa27b2575e39c583145f1e23ea9c7511d", size = 18557, upload-time = "2026-02-23T16:15:04.148Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/58/8a/4db3821584824ac68df00a6ca27331d3f41f40105f22a8dc1b30b1ec83af/alembic_postgresql_enum-1.10.0-py3-none-any.whl", hash = "sha256:39297cb5dc0e71a3e08df1feeab9ffcc1b6aac0be02bf578748d74c442cd3fbf", size = 27774, upload-time = "2026-02-23T16:15:02.789Z" },
+]
+
+[[package]]
 name = "annotated-doc"
 version = "0.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -2044,7 +2057,7 @@ wheels = [
 
 [[package]]
 name = "sqlargon"
-version = "1.0.4b1"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -2073,6 +2086,7 @@ pagination = [
     { name = "sqlakeyset" },
 ]
 postgres = [
+    { name = "alembic-postgresql-enum" },
     { name = "asyncpg" },
 ]
 sqlite = [
@@ -2080,6 +2094,7 @@ sqlite = [
 ]
 standard = [
     { name = "aiosqlite" },
+    { name = "alembic-postgresql-enum" },
     { name = "anyio" },
     { name = "asyncpg" },
     { name = "croniter" },
@@ -2142,24 +2157,20 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", marker = "extra == 'sqlite'", specifier = ">=0.19.0,<1" },
-    { name = "aiosqlite", marker = "extra == 'standard'", specifier = ">=0.19.0,<1" },
     { name = "alembic", specifier = ">=1.13.1,<2" },
+    { name = "alembic-postgresql-enum", marker = "extra == 'postgres'", specifier = ">=1.8.0,<2.0.0" },
     { name = "anyio", marker = "extra == 'cron'", specifier = ">=4.0,<5" },
-    { name = "anyio", marker = "extra == 'standard'", specifier = ">=4.0,<5" },
     { name = "asyncmy", marker = "extra == 'mysql'", specifier = ">=0.2.11" },
     { name = "asyncpg", marker = "extra == 'postgres'", specifier = "<1.0" },
-    { name = "asyncpg", marker = "extra == 'standard'", specifier = "<1.0" },
     { name = "croniter", marker = "extra == 'cron'", specifier = ">=2.0,<7" },
-    { name = "croniter", marker = "extra == 'standard'", specifier = ">=2.0,<7" },
     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.115,<1" },
     { name = "opentelemetry-instrumentation-sqlalchemy", marker = "extra == 'opentelemetry'" },
-    { name = "opentelemetry-instrumentation-sqlalchemy", marker = "extra == 'standard'" },
     { name = "orjson", specifier = ">=3.11.9,<4" },
     { name = "pydantic", specifier = ">=2.0,<3" },
     { name = "pydantic-settings", specifier = ">=2.1.0,<3" },
     { name = "sqlakeyset", marker = "extra == 'pagination'", specifier = ">=2.0.1716332987,<3" },
-    { name = "sqlakeyset", marker = "extra == 'standard'", specifier = ">=2.0.1716332987,<3" },
     { name = "sqlalchemy", specifier = ">2.0,<3" },
+    { name = "sqlargon", extras = ["postgres", "sqlite", "pagination", "cron", "opentelemetry"], marker = "extra == 'standard'" },
     { name = "uuid-utils", specifier = ">=0.16.0,<1" },
 ]
 provides-extras = ["fastapi", "postgres", "sqlite", "mysql", "pagination", "cron", "opentelemetry", "standard"]

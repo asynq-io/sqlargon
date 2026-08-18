@@ -20,6 +20,7 @@ from .backends import Backend, parse_backends
 from .models import (
     SERVER_DEFAULT_TABLES,
     TABLES,
+    UUIDV7_SERVER_DEFAULT_TABLES,
     DocumentRepository,
     SoftUserRepository,
     UserRepository,
@@ -64,9 +65,12 @@ def database_url(
 @pytest.fixture(scope="session")
 def tables(backend: Backend) -> tuple[sa.Table, ...]:
     """The e2e tables this backend can hold."""
+    tables = TABLES
     if backend.server_side_uuid:
-        return TABLES + SERVER_DEFAULT_TABLES
-    return TABLES
+        tables = tables + SERVER_DEFAULT_TABLES
+    if backend.server_side_uuidv7:
+        tables = tables + UUIDV7_SERVER_DEFAULT_TABLES
+    return tables
 
 
 @pytest.fixture(scope="session")
@@ -132,6 +136,12 @@ def needs_native_locks(backend: Backend) -> None:
 def needs_server_side_uuid(backend: Backend) -> None:
     if not backend.server_side_uuid:
         pytest.skip(f"{backend.name} rejects a generated UUID as a column default")
+
+
+@pytest.fixture
+def needs_server_side_uuidv7(backend: Backend) -> None:
+    if not backend.server_side_uuidv7:
+        pytest.skip(f"{backend.name} lacks uuidv7(), a PostgreSQL 18 server builtin")
 
 
 @pytest.fixture
