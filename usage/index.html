@@ -1,0 +1,1384 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="SQLAlchemy asyncio session and core query wrapper with useful utils.">
+      
+      
+      
+      
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../routing/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Usage - SQLArgon</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#usage" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="SQLArgon" class="md-header__button md-logo" aria-label="SQLArgon" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SQLArgon
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Usage
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 6H7c-3.31 0-6 2.69-6 6s2.69 6 6 6h10c3.31 0 6-2.69 6-6s-2.69-6-6-6m0 10H7c-2.21 0-4-1.79-4-4s1.79-4 4-4h10c2.21 0 4 1.79 4 4s-1.79 4-4 4M7 9c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/asynq-io/sqlargon" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    sqlargon
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="SQLArgon" class="md-nav__button md-logo" aria-label="SQLArgon" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    SQLArgon
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/asynq-io/sqlargon" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    sqlargon
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SQLArgon
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usage
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#databases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Databases
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Models
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repositories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repositories
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#crud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CRUD
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bulk-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bulk operations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bulk operations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#conflict-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conflict handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#soft-deletes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Soft deletes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#building-queries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building queries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transactions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transactions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#named-locks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Named locks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unit-of-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unit of work
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../routing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Database Routing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pagination/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pagination
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cron/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cron
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Column Types & Mixins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/dialects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dialects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alembic Migrations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#databases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Databases
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Models
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repositories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repositories
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#crud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CRUD
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bulk-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bulk operations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bulk operations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#conflict-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conflict handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#soft-deletes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Soft deletes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#building-queries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building queries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transactions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transactions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#named-locks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Named locks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unit-of-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unit of work
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h1>
+<h2 id="databases">Databases<a class="headerlink" href="#databases" title="Permanent link">&para;</a></h2>
+<p>A <code>Database</code> owns one async engine, its session maker and a dialect-specific
+<a href="../reference/dialects/">query builder</a>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlargon</span><span class="w"> </span><span class="kn">import</span> <span class="n">Database</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">db</span> <span class="o">=</span> <span class="n">Database</span><span class="p">(</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">url</span><span class="o">=</span><span class="s2">&quot;postgresql+asyncpg://localhost:5432/app&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">echo</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>          <span class="c1"># any keyword is forwarded to create_async_engine</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">pool_pre_ping</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">db</span> <span class="o">=</span> <span class="n">Database</span><span class="o">.</span><span class="n">from_env</span><span class="p">()</span>  <span class="c1"># build from DATABASE_* environment variables</span>
+</code></pre></div>
+<p>Repositories and units of work are not required to know about it: register one default at
+startup and everything resolves to it.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlargon</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_default_database</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">set_default_database</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+</code></pre></div>
+<p>Without an explicit default, the first repository call builds one lazily from
+<a href="../reference/settings/"><code>DATABASE_*</code> settings</a> — a plain <code>Database</code>, or a primary/replica
+<code>DatabaseCluster</code> when <code>DATABASE_READ_REPLICAS</code> is set. See
+<a href="../routing/">Database Routing</a> for clusters, replicas and shards.</p>
+<p>Lifecycle helpers, useful in application startup/shutdown hooks and tests:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">await</span> <span class="n">db</span><span class="o">.</span><span class="n">verify_connection</span><span class="p">()</span>   <span class="c1"># SELECT 1 on every underlying engine</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">await</span> <span class="n">db</span><span class="o">.</span><span class="n">create_all</span><span class="p">()</span>          <span class="c1"># create tables of db.Model.metadata</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="k">await</span> <span class="n">db</span><span class="o">.</span><span class="n">drop_all</span><span class="p">()</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">await</span> <span class="n">db</span><span class="o">.</span><span class="n">dispose</span><span class="p">()</span>             <span class="c1"># dispose engines and connection pools</span>
+</code></pre></div>
+<h2 id="models">Models<a class="headerlink" href="#models" title="Permanent link">&para;</a></h2>
+<p>Models subclass <code>Base</code> (also exported as <code>ORMModel</code>, and available as <code>db.Model</code>). Table
+names default to the snake-cased class name, and a naming convention for indexes,
+constraints and keys is preconfigured so Alembic produces stable names:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sa</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapped</span><span class="p">,</span> <span class="n">mapped_column</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlargon</span><span class="w"> </span><span class="kn">import</span> <span class="n">Base</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserAccount</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>          <span class="c1"># __tablename__ == &quot;user_account&quot;</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">Unicode</span><span class="p">(</span><span class="mi">255</span><span class="p">))</span>
+</code></pre></div>
+<p><code>sqlargon.mixins</code> provides the usual column sets — <code>UUIDModelMixin</code>, <code>UUIDV7ModelMixin</code>,
+<code>CreatedUpdatedMixin</code> and <code>SoftDeleteMixin</code> — built on the portable column types described
+in the <a href="../reference/types/">types reference</a>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlargon.mixins</span><span class="w"> </span><span class="kn">import</span> <span class="n">CreatedUpdatedMixin</span><span class="p">,</span> <span class="n">SoftDeleteMixin</span><span class="p">,</span> <span class="n">UUIDModelMixin</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">(</span><span class="n">UUIDModelMixin</span><span class="p">,</span> <span class="n">CreatedUpdatedMixin</span><span class="p">,</span> <span class="n">SoftDeleteMixin</span><span class="p">,</span> <span class="n">Base</span><span class="p">):</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">Unicode</span><span class="p">(</span><span class="mi">255</span><span class="p">))</span>
+</code></pre></div>
+<h2 id="repositories">Repositories<a class="headerlink" href="#repositories" title="Permanent link">&para;</a></h2>
+<p>A repository binds one model to a database. The model is read from the generic parameter,
+and <code>__init__</code> takes no arguments, so subclasses work directly as dependencies:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlargon</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLAlchemyRepository</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserRepository</span><span class="p">(</span><span class="n">SQLAlchemyRepository</span><span class="p">[</span><span class="n">User</span><span class="p">]):</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">default_order_by</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">created_at</span><span class="o">.</span><span class="n">desc</span><span class="p">()</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_by_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">User</span><span class="p">:</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>        <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">filter_by</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">one</span><span class="p">()</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="n">users</span> <span class="o">=</span> <span class="n">UserRepository</span><span class="p">()</span>
+</code></pre></div>
+<p><code>default_order_by</code> (a column expression or a column name) is applied to the repository's
+default query, so <code>all()</code>, <code>list()</code> and pagination are deterministically ordered.</p>
+<p>Three more ways to declare the model, for shared base classes and dynamically built
+repositories:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlargon.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">R1</span><span class="p">(</span><span class="n">SQLAlchemyRepository</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="n">User</span><span class="p">):</span> <span class="o">...</span>            <span class="c1"># explicit model</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">TenantRepository</span><span class="p">(</span><span class="n">SQLAlchemyRepository</span><span class="p">[</span><span class="n">Model</span><span class="p">],</span> <span class="n">abstract</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Shared behaviour, no model of its own.&quot;&quot;&quot;</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">for_tenant</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tenant_id</span><span class="p">):</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>        <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">tenant_id</span><span class="o">=</span><span class="n">tenant_id</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="k">class</span><span class="w"> </span><span class="nc">R2</span><span class="p">(</span><span class="n">TenantRepository</span><span class="p">[</span><span class="n">User</span><span class="p">]):</span> <span class="o">...</span>                       <span class="c1"># model from the subscript</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="k">class</span><span class="w"> </span><span class="nc">AuditedRepository</span><span class="p">(</span><span class="n">SQLAlchemyRepository</span><span class="p">,</span> <span class="n">abstract</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span> <span class="o">...</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="k">class</span><span class="w"> </span><span class="nc">R3</span><span class="p">(</span><span class="n">AuditedRepository</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="n">User</span><span class="p">):</span> <span class="o">...</span>
+</code></pre></div>
+<p>Useful attributes on every instance: <code>model</code>, <code>db</code> (the resolved database),
+<code>qb</code> (the dialect's query builder) and <code>query</code> (the statement built so far).</p>
+<h2 id="crud">CRUD<a class="headerlink" href="#crud" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;John&quot;</span><span class="p">)</span>                     <span class="c1"># None if it conflicts</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;John&quot;</span><span class="p">)</span>                        <span class="c1"># None if missing</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">get_or_create</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;John&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">get_or_create</span><span class="p">({</span><span class="s2">&quot;last_name&quot;</span><span class="p">:</span> <span class="s2">&quot;Doe&quot;</span><span class="p">},</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;John&quot;</span><span class="p">)</span>  <span class="c1"># defaults first</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">create_or_update</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">user_id</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;John&quot;</span><span class="p">)</span>         <span class="c1"># upsert</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">all_users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="n">all_users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="n">matching</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">list</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;John&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="n">matching</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">list</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;John&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="n">total</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;John&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">update_one</span><span class="p">({</span><span class="s2">&quot;last_name&quot;</span><span class="p">:</span> <span class="s2">&quot;Connor&quot;</span><span class="p">},</span> <span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">update_many</span><span class="p">({</span><span class="s2">&quot;last_name&quot;</span><span class="p">:</span> <span class="s2">&quot;Connor&quot;</span><span class="p">},</span> <span class="n">User</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;John&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">delete_one</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="n">deleted</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">delete_many</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;John&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span>                     <span class="c1"># returns nothing</span>
+</code></pre></div>
+<p>Positional arguments are SQLAlchemy column expressions, keyword arguments are equality
+filters (<code>filter_by</code>); both can be combined.</p>
+<p>Every one of these calls runs in its own transaction, committed when it returns — group
+them with <a href="#transactions"><code>atomic</code></a> when they must succeed or fail together.</p>
+<p>The methods that hand a model back read it off a <code>RETURNING</code> clause where the dialect has
+one, and re-read the written rows in a second statement — within the same transaction —
+where it does not, as on MySQL and MariaDB. See
+<a href="../reference/dialects/#capabilities">dialects</a> for what that costs and when it cannot be
+done.</p>
+<h2 id="bulk-operations">Bulk operations<a class="headerlink" href="#bulk-operations" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">rows</span> <span class="o">=</span> <span class="p">[{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Alice&quot;</span><span class="p">},</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Bob&quot;</span><span class="p">}]</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">bulk_create</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span>                              <span class="c1"># ON CONFLICT DO NOTHING</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">created</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">bulk_create</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">return_results</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">bulk_create</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">ignore_conflicts</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>      <span class="c1"># let conflicts raise</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">bulk_create_or_update</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span>                    <span class="c1"># ON CONFLICT DO UPDATE</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="n">updated</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">bulk_create_or_update</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">return_results</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">bulk_update</span><span class="p">(</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>    <span class="n">values</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Alice&quot;</span><span class="p">,</span> <span class="s2">&quot;last_name&quot;</span><span class="p">:</span> <span class="s2">&quot;Connor&quot;</span><span class="p">}],</span>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="n">on_</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">},</span>                                          <span class="c1"># match rows on these columns</span>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="p">)</span>
+</code></pre></div>
+<p><code>bulk_update</code> compiles a single executemany statement with bound parameters, matching each
+row on the <code>on_</code> columns — one round trip for the whole batch.</p>
+<h3 id="conflict-handling">Conflict handling<a class="headerlink" href="#conflict-handling" title="Permanent link">&para;</a></h3>
+<p><code>insert(..., ignore_conflicts=True)</code>, <code>upsert(...)</code> and the bulk helpers derive their
+<code>ON CONFLICT</code> clause from the <code>on_conflict</code> property, which defaults to the model's primary
+key as <code>index_elements</code> and every remaining column in <code>set_</code>. Override it per repository:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlargon.typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">OnConflictOptions</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserRepository</span><span class="p">(</span><span class="n">SQLAlchemyRepository</span><span class="p">[</span><span class="n">User</span><span class="p">]):</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="nd">@property</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">on_conflict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">OnConflictOptions</span><span class="p">:</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>        <span class="k">return</span> <span class="p">{</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>            <span class="s2">&quot;index_elements&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;email&quot;</span><span class="p">},</span>   <span class="c1"># or &quot;constraint&quot;: &quot;uq_user__email&quot;</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>            <span class="s2">&quot;set_&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;last_name&quot;</span><span class="p">},</span>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>            <span class="s2">&quot;exclude_set&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;created_at&quot;</span><span class="p">},</span>  <span class="c1"># never overwritten</span>
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>            <span class="s2">&quot;where&quot;</span><span class="p">:</span> <span class="n">User</span><span class="o">.</span><span class="n">tombstone</span><span class="o">.</span><span class="n">is_</span><span class="p">(</span><span class="kc">False</span><span class="p">),</span>
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>        <span class="p">}</span>
+</code></pre></div>
+<p>Options can also be passed per call: <code>await users.upsert(rows, index_elements={"email"})</code>.
+Supported keys are <code>index_elements</code>, <code>constraint</code>, <code>index_where</code>, <code>set_</code>, <code>exclude_set</code> and
+<code>where</code>; support per dialect is listed in the <a href="../reference/dialects/">dialects reference</a>.</p>
+<p>A column is normally overwritten with the value proposed for insertion. Pass <code>set_</code> as a
+mapping to update one from an expression instead — <code>excluded</code> is the proposed row, and the
+model refers to the row already stored (PostgreSQL and SQLite only):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">excluded</span> <span class="o">=</span> <span class="n">users</span><span class="o">.</span><span class="n">qb</span><span class="o">.</span><span class="n">excluded</span><span class="p">(</span><span class="n">User</span><span class="p">)</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">upsert</span><span class="p">(</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    <span class="n">rows</span><span class="p">,</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>    <span class="n">index_elements</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;email&quot;</span><span class="p">},</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>    <span class="n">set_</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">excluded</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s2">&quot;logins&quot;</span><span class="p">:</span> <span class="n">User</span><span class="o">.</span><span class="n">logins</span> <span class="o">+</span> <span class="mi">1</span><span class="p">},</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="p">)</span>
+</code></pre></div>
+<h2 id="soft-deletes">Soft deletes<a class="headerlink" href="#soft-deletes" title="Permanent link">&para;</a></h2>
+<p><code>SoftDeleteRepository</code> tombstones rows instead of removing them. Declare the model on
+<code>SoftDeleteBase</code> — <a href="../reference/types/#mixins"><code>SoftDeleteMixin</code></a> already mixed into <code>Base</code> —
+so the repository knows its model carries a <code>tombstone</code> column:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlargon</span><span class="w"> </span><span class="kn">import</span> <span class="n">SoftDeleteBase</span><span class="p">,</span> <span class="n">SoftDeleteRepository</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlargon.mixins</span><span class="w"> </span><span class="kn">import</span> <span class="n">UUIDModelMixin</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">(</span><span class="n">UUIDModelMixin</span><span class="p">,</span> <span class="n">SoftDeleteBase</span><span class="p">):</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">Unicode</span><span class="p">(</span><span class="mi">255</span><span class="p">))</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserRepository</span><span class="p">(</span><span class="n">SoftDeleteRepository</span><span class="p">[</span><span class="n">User</span><span class="p">]):</span> <span class="o">...</span>
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="n">users</span> <span class="o">=</span> <span class="n">UserRepository</span><span class="p">()</span>
+</code></pre></div>
+<p>Every statement is scoped to live rows — no <code>tombstone=False</code> filter to remember, and no way
+to update a row that has been deleted:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span>     <span class="c1"># UPDATE ... SET tombstone = true</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">delete_one</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span>   <span class="c1"># the tombstoned row</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">delete_many</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;John&quot;</span><span class="p">)</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">list</span><span class="p">()</span>                         <span class="c1"># deleted rows are gone from reads</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>                        <span class="c1"># ... and from counts</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">update_many</span><span class="p">({</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Sarah&quot;</span><span class="p">})</span> <span class="c1"># ... and are never updated</span>
+</code></pre></div>
+<p>Reach past the scope explicitly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">with_deleted</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>           <span class="c1"># live and deleted rows</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">only_deleted</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>           <span class="c1"># the trash</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">only_deleted</span><span class="p">()</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>         <span class="c1"># ... how full it is</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">only_deleted</span><span class="p">()</span><span class="o">.</span><span class="n">hard_delete</span><span class="p">()</span>   <span class="c1"># ... and emptied</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="n">restored</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">restore</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span>  <span class="c1"># clears the tombstone</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">hard_delete</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">is_deleted</span><span class="p">)</span>   <span class="c1"># a real DELETE</span>
+</code></pre></div>
+<p>Both scopes hold for every statement the returned copy builds — reads, counts, updates and
+bulk updates alike — not just the next one.</p>
+<p>The flag belongs to <code>delete</code> and <code>restore</code> alone: it is left out of the default
+<code>ON CONFLICT DO UPDATE</code> set, so <code>create_or_update</code> cannot silently resurrect a deleted row.
+For the same reason <code>get_or_create</code> raises <code>DeletedRowExistsError</code> when the row it would
+create is held by a tombstoned one — creating it would break the unique key, and returning it
+would resurrect it behind your back. Restore or hard delete it first.</p>
+<p><code>SoftDeleteRepository</code> is generic over <code>SoftDeleteModel</code>, a type variable bound to
+<code>SoftDeleteBase</code>, so a type checker rejects <code>SoftDeleteRepository[SomeOtherModel]</code> at the
+subscript. At runtime the looser <code>SoftDeleteMixin</code> is enough — a model that mixes it into
+<code>Base</code> by hand works, it just needs a <code># type: ignore[type-var]</code>. Anything without the mixin
+raises <code>TypeError</code> on subclassing. Write shared behaviour against the same type variable:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlargon</span><span class="w"> </span><span class="kn">import</span> <span class="n">SoftDeleteModel</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">AuditedRepository</span><span class="p">(</span><span class="n">SoftDeleteRepository</span><span class="p">[</span><span class="n">SoftDeleteModel</span><span class="p">],</span> <span class="n">abstract</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">purge_trash</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hard_delete</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">is_deleted</span><span class="p">)</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserRepository</span><span class="p">(</span><span class="n">AuditedRepository</span><span class="p">[</span><span class="n">User</span><span class="p">]):</span> <span class="o">...</span>
+</code></pre></div>
+<h2 id="building-queries">Building queries<a class="headerlink" href="#building-queries" title="Permanent link">&para;</a></h2>
+<p><code>select</code>, <code>insert</code>, <code>upsert</code>, <code>update</code>, <code>delete</code>, <code>where</code>/<code>filter</code>, <code>join</code> and <code>load</code> return
+a repository copy carrying the statement. Any other attribute is proxied to the underlying
+SQLAlchemy statement, so <code>limit</code>, <code>offset</code>, <code>order_by</code>, <code>group_by</code>, <code>having</code>, <code>distinct</code>, ...
+chain as usual:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">recent</span> <span class="o">=</span> <span class="k">await</span> <span class="p">(</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>    <span class="n">users</span><span class="o">.</span><span class="n">select</span><span class="p">()</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>    <span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">Order</span><span class="p">,</span> <span class="n">Order</span><span class="o">.</span><span class="n">user_id</span> <span class="o">==</span> <span class="n">User</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;John&quot;</span><span class="p">)</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>    <span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">created_at</span><span class="o">.</span><span class="n">desc</span><span class="p">())</span>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>    <span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>    <span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="p">)</span>
+</code></pre></div>
+<p>Awaiting the repository executes the statement and returns a SQLAlchemy <code>Result</code>; the
+terminal helpers cast it for you:</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>all(unique=False)</code></td>
+<td><code>Sequence[Model]</code></td>
+</tr>
+<tr>
+<td><code>one()</code> / <code>one_or_none()</code> / <code>first()</code></td>
+<td><code>Model</code>, or <code>None</code></td>
+</tr>
+<tr>
+<td><code>scalar()</code></td>
+<td>first column of the first row</td>
+</tr>
+<tr>
+<td><code>scalars()</code> / <code>unique()</code></td>
+<td><code>ScalarResult[Model]</code></td>
+</tr>
+<tr>
+<td><code>mappings()</code></td>
+<td><code>MappingResult</code></td>
+</tr>
+<tr>
+<td><code>stream()</code></td>
+<td><code>AsyncIterator[Row]</code></td>
+</tr>
+<tr>
+<td><code>execute()</code></td>
+<td><code>Result</code></td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;John&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">one_or_none</span><span class="p">()</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">name</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">scalar</span><span class="p">()</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">rows</span> <span class="o">=</span> <span class="p">(</span><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">User</span><span class="o">.</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">mappings</span><span class="p">())</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="k">async</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">users</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">stream</span><span class="p">():</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>    <span class="o">...</span>
+</code></pre></div>
+<p><code>load(*keys)</code> applies <code>selectinload</code> for relationships, and <code>select(with_for_update=...)</code>
+takes <code>True</code> or a dict of SQLAlchemy's <code>with_for_update</code> options:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">with_for_update</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;skip_locked&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span><span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">orders</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+<p>To run a statement built elsewhere, or several statements in one session:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">created_at</span><span class="p">)))</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="k">await</span> <span class="n">users</span><span class="o">.</span><span class="n">execute_many</span><span class="p">(</span><span class="n">stmt_a</span><span class="p">,</span> <span class="n">stmt_b</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="transactions">Transactions<a class="headerlink" href="#transactions" title="Permanent link">&para;</a></h2>
+<p>Each repository call commits on its own. Wrap a method in <code>atomic</code> to make all of its
+queries share one session, committed on success and rolled back on error:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlargon</span><span class="w"> </span><span class="kn">import</span> <span class="n">atomic</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserRepository</span><span class="p">(</span><span class="n">SQLAlchemyRepository</span><span class="p">[</span><span class="n">User</span><span class="p">]):</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="nd">@atomic</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">transfer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source_id</span><span class="p">:</span> <span class="n">UUID</span><span class="p">,</span> <span class="n">target_id</span><span class="p">:</span> <span class="n">UUID</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">update_one</span><span class="p">({</span><span class="s2">&quot;owner_id&quot;</span><span class="p">:</span> <span class="n">target_id</span><span class="p">},</span> <span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">source_id</span><span class="p">)</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">source_id</span><span class="p">)</span>
+</code></pre></div>
+<p>The database object offers the same for any coroutine, plus explicit session access:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nd">@db</span><span class="o">.</span><span class="n">atomic</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">import_users</span><span class="p">(</span><span class="n">rows</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="k">async</span> <span class="k">with</span> <span class="n">db</span><span class="o">.</span><span class="n">session_context</span><span class="p">()</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>      <span class="c1"># reuses an open session if there is one</span>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>    <span class="o">...</span>
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="k">async</span> <span class="k">with</span> <span class="n">db</span><span class="o">.</span><span class="n">session</span><span class="p">()</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>              <span class="c1"># always a fresh session</span>
+<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>    <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;VACUUM&quot;</span><span class="p">))</span>
+</code></pre></div>
+<p><code>session_context()</code> is what repositories use internally: nesting it reuses the context-local
+session instead of opening a second one, which is why <code>atomic</code> composes with repository
+methods that are themselves atomic.</p>
+<h2 id="named-locks">Named locks<a class="headerlink" href="#named-locks" title="Permanent link">&para;</a></h2>
+<p><code>lock</code> takes a database-native advisory lock where the dialect supports one (Postgres and
+MySQL) and falls back to a process-local <code>asyncio.Lock</code> otherwise:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">async</span> <span class="k">with</span> <span class="n">db</span><span class="o">.</span><span class="n">lock</span><span class="p">(</span><span class="s2">&quot;nightly-import&quot;</span><span class="p">):</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>    <span class="o">...</span>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="nd">@db</span><span class="o">.</span><span class="n">with_lock</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="s2">&quot;nightly-import&quot;</span><span class="p">)</span>
+<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">run_import</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+</code></pre></div>
+<h2 id="unit-of-work">Unit of work<a class="headerlink" href="#unit-of-work" title="Permanent link">&para;</a></h2>
+<p>Repositories declared as annotations on a unit of work are bound to the unit's database and
+share one session — and therefore one transaction:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlargon</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLAlchemyUnitOfWork</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">OrdersUow</span><span class="p">(</span><span class="n">SQLAlchemyUnitOfWork</span><span class="p">):</span>
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>    <span class="n">users</span><span class="p">:</span> <span class="n">UserRepository</span>
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>    <span class="n">orders</span><span class="p">:</span> <span class="n">OrderRepository</span>
+<a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>
+<a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>
+<a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="k">async</span> <span class="k">with</span> <span class="n">OrdersUow</span><span class="p">()</span> <span class="k">as</span> <span class="n">uow</span><span class="p">:</span>
+<a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>    <span class="n">user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">uow</span><span class="o">.</span><span class="n">users</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;John&quot;</span><span class="p">)</span>
+<a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>    <span class="k">await</span> <span class="n">uow</span><span class="o">.</span><span class="n">orders</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">user_id</span><span class="o">=</span><span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">total</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+<a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a>    <span class="k">await</span> <span class="n">uow</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+</code></pre></div>
+<p><code>commit()</code> and <code>rollback()</code> act on that shared session; leaving the block without an
+exception commits it anyway, and an exception rolls it back — the explicit <code>commit()</code> above
+is only needed when work follows inside the same block. Opened inside an already-open
+session context (another unit of work, or an <code>atomic</code> method), the unit joins that session
+and the outer scope decides whether the work is committed.</p>
+<p>A unit of work never spans databases — there is no two-phase commit. On a cluster the
+member database is resolved once on <code>__aenter__</code> and pinned for the whole transaction:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="k">async</span> <span class="k">with</span> <span class="n">OrdersUow</span><span class="p">()</span><span class="o">.</span><span class="n">using</span><span class="p">(</span><span class="n">shard_key</span><span class="o">=</span><span class="n">tenant_id</span><span class="p">)</span> <span class="k">as</span> <span class="n">uow</span><span class="p">:</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>    <span class="k">await</span> <span class="n">uow</span><span class="o">.</span><span class="n">orders</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="o">**</span><span class="n">values</span><span class="p">)</span>
+</code></pre></div>
+<p>Like repositories, <code>__init__</code> takes no arguments (so a unit of work works as a dependency),
+<code>using(...)</code> returns a fresh, not-yet-entered copy, and the same unit cannot be entered
+twice. Subclass <code>AbstractUnitOfWork</code> if you need a non-SQLAlchemy implementation behind the
+same interface.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["search.suggest", "search.highlight", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
