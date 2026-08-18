@@ -5,8 +5,13 @@ from sqlalchemy import MetaData
 from sqlalchemy.orm import DeclarativeBase, declared_attr
 
 from .mixins import (
+    AuditableMixin,
+    CreatedUpdatedMixin,
+    IntegerAuditableMixin,
     SoftDeleteMixin,
+    UUIDAuditableMixin,
     UUIDVersionedMixin,
+    VersionedMixin,
     XminVersionedMixin,
 )
 
@@ -70,7 +75,18 @@ class SoftDeleteBase(SoftDeleteMixin, Base):
 SoftDeleteModel = TypeVar("SoftDeleteModel", bound=SoftDeleteBase)
 
 
-class VersionedBase(UUIDVersionedMixin, Base):
+class AnyVersionedBase(VersionedMixin, Base):
+    """Declarative base shared by every versioning strategy.
+
+    It declares no version column of its own; it exists so
+    :class:`~sqlargon.repository.VersionedRepository` can type its model
+    against any strategy rather than against the UUID one alone.
+    """
+
+    __abstract__ = True
+
+
+class VersionedBase(UUIDVersionedMixin, AnyVersionedBase):
     """Declarative base for models versioned with a UUID column.
 
     Inherit it instead of combining :class:`UUIDVersionedMixin` with
@@ -84,7 +100,7 @@ class VersionedBase(UUIDVersionedMixin, Base):
     __abstract__ = True
 
 
-class XminVersionedBase(XminVersionedMixin, Base):
+class XminVersionedBase(XminVersionedMixin, AnyVersionedBase):
     """Declarative base for PostgreSQL models versioned via ``xmin``.
 
     Only works on PostgreSQL — the ``xmin`` system column does not exist
@@ -94,4 +110,47 @@ class XminVersionedBase(XminVersionedMixin, Base):
     __abstract__ = True
 
 
-VersionedModel = TypeVar("VersionedModel", bound=VersionedBase)
+VersionedModel = TypeVar("VersionedModel", bound=AnyVersionedBase)
+
+
+class AnyAuditableBase(
+    AuditableMixin, CreatedUpdatedMixin, SoftDeleteBase, AnyVersionedBase
+):
+    """Declarative base shared by every append-only versioning strategy.
+
+    It declares no version column of its own -- inherit
+    :class:`AuditableBase` or :class:`UUIDAuditableBase`.
+
+    ``created_at`` timestamps the version rather than the entity, and
+    ``updated_at`` always equals it, because a row of an append-only table
+    is never updated.
+    """
+
+    __abstract__ = True
+
+
+class AuditableBase(IntegerAuditableMixin, AnyAuditableBase):
+    """Declarative base for append-only models with counted versions.
+
+    The version column joins the primary key, so a model combining this with
+    :class:`~sqlargon.mixins.UUIDModelMixin` is keyed by ``(id, version)``
+    and its entity key is derived as ``(id,)``::
+
+        class Article(UUIDModelMixin, AuditableBase):
+            title: Mapped[str] = mapped_column(sa.Unicode(255))
+    """
+
+    __abstract__ = True
+
+
+class UUIDAuditableBase(UUIDAuditableMixin, AnyAuditableBase):
+    """Declarative base for append-only models versioned by UUIDv7.
+
+    The counterpart of :class:`AuditableBase` for writers that cannot
+    coordinate on a counter.
+    """
+
+    __abstract__ = True
+
+
+AuditableModel = TypeVar("AuditableModel", bound=AnyAuditableBase)

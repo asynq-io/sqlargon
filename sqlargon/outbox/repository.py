@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast, overload
 
 import sqlalchemy as sa
 from pydantic_core import to_jsonable_python
-from sqlalchemy.engine.result import IteratorResult, SimpleResultMetaData
 
 from sqlargon.mixins import CreatedUpdatedMixin
 from sqlargon.orm import Model
 from sqlargon.repository import SQLAlchemyRepository
+from sqlargon.repository.base import _as_result, _as_scalars
 
 from .config import Operation, OutboxConfig
 from .models import OutboxEvent
@@ -25,21 +25,6 @@ if TYPE_CHECKING:
     from typing_extensions import Unpack
 
     from sqlargon.typing import MultipleValues, OnConflictOptions, SingleValue, Values
-
-
-def _as_result(rows: Sequence[object]) -> IteratorResult[Any]:
-    """Re-wrap already fetched rows as a single-column result.
-
-    The capture hooks have to consume the result of the write they wrap in
-    order to build the events, so the rows are handed back in a fresh result
-    rather than the exhausted one.
-    """
-    metadata = SimpleResultMetaData(("value",))
-    return IteratorResult(metadata, iter([(row,) for row in rows]))
-
-
-def _as_scalars(rows: Sequence[Model]) -> ScalarResult[Model]:
-    return cast("ScalarResult[Model]", _as_result(rows).scalars())
 
 
 class OutboxEventRepository(SQLAlchemyRepository[OutboxEvent]):

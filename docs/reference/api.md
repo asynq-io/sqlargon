@@ -10,9 +10,13 @@ Generated from the source. See [Usage](../usage.md) for a narrative introduction
 
 ::: sqlargon.repository.VersionedRepository
 
+::: sqlargon.repository.AuditableRepository
+
 ::: sqlargon.repository.DeletedRowExistsError
 
 ::: sqlargon.repository.ConcurrentModificationError
+
+::: sqlargon.repository.AppendOnlyError
 
 ::: sqlargon.functools.atomic
 
@@ -131,6 +135,8 @@ Generated from the source. See [Usage](../usage.md) for a narrative introduction
 ::: sqlargon.orm.Base
 
 ::: sqlargon.mixins
+
+::: sqlargon.audit
 
 ::: sqlargon.types.uuid
 

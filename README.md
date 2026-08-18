@@ -335,6 +335,44 @@ ordering.
 pydantic-validated columns. `sqlargon.mixins` bundles them into `UUIDModelMixin`,
 `UUIDV7ModelMixin`, `CreatedUpdatedMixin` and `SoftDeleteMixin`.
 
+## Auditable models
+
+`AuditableRepository` never updates a row: every write appends the next `version` of the
+same entity, so the table *is* the audit log. Reads are scoped to the newest live version,
+so the usual methods keep their usual meaning:
+
+```python
+from sqlargon import AuditableBase, AuditableRepository
+from sqlargon.mixins import UUIDModelMixin
+
+
+class Article(UUIDModelMixin, AuditableBase):
+    title: Mapped[str] = mapped_column(sa.Unicode(255))
+
+
+class ArticleRepository(AuditableRepository[Article]): ...
+
+
+articles = ArticleRepository()
+
+article = await articles.create(title="draft")  # version 1
+await articles.update_one({"title": "final"}, Article.id == article.id)  # version 2
+
+await articles.get(id=article.id)  # version 2
+await articles.history(id=article.id)  # versions 1 and 2
+await articles.get_version(1, id=article.id)  # version 1
+await articles.at(yesterday).list()  # the state as of yesterday
+
+await articles.remove(Article.id == article.id)  # appends a tombstoned version 3
+await articles.restore(Article.id == article.id)  # and a live version 4
+```
+
+The version joins the primary key, so concurrent appends collide there rather than one
+silently winning, and `update_if_match` gives the cheaper check first. Versions are either
+a human-readable counter (`AuditableBase`) or a sortable UUIDv7 (`UUIDAuditableBase`), and
+`sqlargon.audit` relates other tables to one exact version or to whichever is newest. See
+the [documentation](https://asynq-io.github.io/sqlargon/auditable/) for the full picture.
+
 ## FastAPI
 
 Repository and unit-of-work `__init__` take no arguments, so subclasses work directly as

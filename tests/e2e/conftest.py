@@ -22,10 +22,15 @@ from .models import (
     SERVER_DEFAULT_TABLES,
     TABLES,
     XMIN_TABLES,
+    AuditArticleRepository,
+    AuditCommentRepository,
+    AuditFollowRepository,
     DocumentRepository,
     OutboxUserRepository,
+    RawAuditArticleRepository,
     SoftUserRepository,
     UserRepository,
+    UUIDAuditArticleRepository,
     VersionedUserRepository,
     XminUserRepository,
 )
@@ -191,3 +196,34 @@ def xmin_users() -> XminUserRepository:
 @pytest.fixture
 def outbox_users() -> OutboxUserRepository:
     return OutboxUserRepository()
+
+
+@pytest.fixture
+def audit_articles() -> AuditArticleRepository:
+    return AuditArticleRepository()
+
+
+@pytest.fixture
+def raw_audit_articles() -> RawAuditArticleRepository:
+    return RawAuditArticleRepository()
+
+
+@pytest.fixture
+def uuid_audit_articles() -> UUIDAuditArticleRepository:
+    return UUIDAuditArticleRepository()
+
+
+@pytest.fixture
+def audit_comments() -> AuditCommentRepository:
+    return AuditCommentRepository()
+
+
+@pytest.fixture
+def audit_follows() -> AuditFollowRepository:
+    return AuditFollowRepository()
+
+
+@pytest.fixture
+def needs_foreign_keys(backend: Backend) -> None:
+    if backend.name == "sqlite":
+        pytest.skip("sqlite does not enforce foreign keys unless asked to")
