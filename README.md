@@ -50,7 +50,8 @@ uv add sqlargon
 ```
 
 Optional extras: `postgres`, `sqlite`, `mysql`, `pagination` (cursor pagination),
-`cron`, `opentelemetry`, or `standard` for all of them:
+`cron`, `outbox`, `eventiq`, `opentelemetry`, or `standard` for all of them
+except `eventiq`:
 
 ```shell
 pip install "sqlargon[standard]"
@@ -291,6 +292,40 @@ async for page in UserRepository().paginate.pages(page_size=100):
 Available strategies: `PageNumberPagination`, `TotalPageNumberPagination`,
 `LimitOffsetPagination`, `TotalLimitOffsetPagination` and `CursorPagination`
 (keyset, requires `sqlargon[pagination]`).
+
+## Outbox
+
+`sqlargon.outbox` implements the transactional outbox pattern: a write through the repository
+also appends a CloudEvent-shaped row to `outbox_events` **in the same transaction**, so an
+event can neither be lost by a rollback nor published for a row that never committed. A
+background relay then publishes them in write order (requires `sqlargon[outbox]`):
+
+```python
+from sqlargon import Base
+from sqlargon.outbox import OutboxConfig, OutboxRelay, OutboxRepository
+
+
+class User(UUIDModelMixin, CreatedUpdatedMixin, Base):  # is_new tells insert from update
+    name: Mapped[str] = mapped_column(sa.Unicode(255))
+    password: Mapped[str] = mapped_column(sa.Unicode(255))
+
+
+class UserRepository(OutboxRepository[User]):
+    outbox = OutboxConfig(topic="users", exclude={"password"})
+
+
+await UserRepository().create(name="John", password=hashed)
+# -> one outbox_events row, type "user.created", password left out
+
+async with OutboxRelay(publish).running():  # publish is any async callable
+    ...
+```
+
+The relay takes a plain publisher callable, so sqlargon depends on no broker client;
+`sqlargon.integrations.eventiq` adapts the rows to `eventiq.CloudEvent`. Only writes that go
+through the repository are recorded. See the
+[outbox docs](https://asynq-io.github.io/sqlargon/outbox/) for retention, retries and
+ordering.
 
 ## Column types and mixins
 

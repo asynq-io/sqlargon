@@ -60,8 +60,10 @@ Drivers and optional features ship as extras:
 | `mysql` | `asyncmy` |
 | `pagination` | `sqlakeyset`, required for cursor pagination |
 | `cron` | `croniter`, `anyio` |
+| `outbox` | `anyio` |
+| `eventiq` | `eventiq`, required by the outbox integration layer |
 | `opentelemetry` | `opentelemetry-instrumentation-sqlalchemy` |
-| `standard` | all of the above |
+| `standard` | all of the above except `eventiq` |
 
 ```shell
 pip install "sqlargon[standard]"

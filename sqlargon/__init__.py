@@ -3,7 +3,11 @@ from importlib.metadata import version
 from .cluster import AnyDatabase, DatabaseCluster
 from .database import BaseDatabase, Database, ReadOnlyDatabase, ReadOnlyError
 from .functools import atomic
-from .mixins import UUIDVersionedMixin, VersionedMixin, XminVersionedMixin
+from .mixins import (
+    UUIDVersionedMixin,
+    VersionedMixin,
+    XminVersionedMixin,
+)
 from .orm import (
     Base,
     Model,
