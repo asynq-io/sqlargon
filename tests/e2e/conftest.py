@@ -13,9 +13,11 @@ from typing import TYPE_CHECKING
 
 import anyio
 import pytest
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from sqlargon import Base, Database
+from sqlargon.vectors import init_vectors
 
 from .backends import Backend, parse_backends
 from .models import (
@@ -31,14 +33,14 @@ from .models import (
     SoftUserRepository,
     UserRepository,
     UUIDAuditArticleRepository,
+    VectorDocRepository,
+    VectorNoteRepository,
     VersionedUserRepository,
     XminUserRepository,
 )
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
-
-    import sqlalchemy as sa
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
@@ -86,17 +88,26 @@ def tables(backend: Backend) -> tuple[sa.Table, ...]:
 
 
 @pytest.fixture(scope="session")
-def schema(database_url: str, tables: tuple[sa.Table, ...]) -> Generator[None]:
+def schema(
+    backend: Backend, database_url: str, tables: tuple[sa.Table, ...]
+) -> Generator[None]:
     """Create the e2e tables once per backend, and drop them afterwards.
 
     DDL runs in its own throwaway engine and event loop, so the schema can be
     session scoped without an engine outliving the loop that built it.
+
+    The ``vector`` extension comes first: a ``VECTOR`` column cannot be
+    declared before the type it names exists.
     """
 
     async def run(*, create: bool) -> None:
         engine = create_async_engine(database_url)
         try:
             async with engine.begin() as connection:
+                if create and backend.dialect == "postgresql":
+                    await connection.execute(
+                        sa.text("CREATE EXTENSION IF NOT EXISTS vector")
+                    )
                 await connection.run_sync(
                     Base.metadata.create_all if create else Base.metadata.drop_all,
                     tables=list(tables),
@@ -227,3 +238,34 @@ def audit_follows() -> AuditFollowRepository:
 def needs_foreign_keys(backend: Backend) -> None:
     if backend.name == "sqlite":
         pytest.skip("sqlite does not enforce foreign keys unless asked to")
+
+
+@pytest.fixture
+def needs_vector_search(backend: Backend) -> None:
+    if not backend.vector_search:
+        pytest.skip(f"{backend.name} cannot search vectors")
+    if backend.dialect == "sqlite":
+        pytest.importorskip(
+            "sqlite_vector", reason="sqlite vector search needs 'sqliteai-vector'"
+        )
+
+
+@pytest.fixture
+async def vector_db(db: Database) -> Database:
+    """The database under test, prepared for vector search.
+
+    On PostgreSQL this creates the extension; on SQLite it registers the
+    loadable one on the pool, which every later connection then gets.
+    """
+    await init_vectors(db)
+    return db
+
+
+@pytest.fixture
+def vector_notes(vector_db: Database) -> VectorNoteRepository:
+    return VectorNoteRepository().using(db=vector_db)
+
+
+@pytest.fixture
+def vector_docs(vector_db: Database) -> VectorDocRepository:
+    return VectorDocRepository().using(db=vector_db)

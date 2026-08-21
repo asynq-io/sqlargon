@@ -11,7 +11,7 @@ from uuid import UUID
 
 import sqlalchemy as sa
 from pydantic import BaseModel
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 
 from sqlargon import (
     AuditableBase,
@@ -33,6 +33,13 @@ from sqlargon.outbox import OutboxConfig, OutboxEvent, OutboxRepository
 from sqlargon.types import GUID, JSON, GenerateUUID, GenerateUUIDV7, Timestamp, now
 from sqlargon.types.pydantic import Pydantic
 from sqlargon.typing import OnConflictOptions
+from sqlargon.vectors import (
+    EmbeddingBase,
+    HybridVectorRepository,
+    VectorCollection,
+    VectorDocument,
+    VectorRepository,
+)
 
 
 class Address(BaseModel):
@@ -230,6 +237,39 @@ class OutboxUserRepository(OutboxRepository[OutboxUser]):
     )
 
 
+class VectorNote(UUIDModelMixin, EmbeddingBase):
+    """An embedding and nothing else, to prove the mixins are optional."""
+
+    __tablename__ = "e2e_vector_note"
+    __vector_dim__ = 3
+
+    @declared_attr.directive
+    def __table_args__(cls) -> tuple[sa.Index, ...]:
+        return (cls.embedding_index(),)
+
+    name: Mapped[str] = mapped_column(sa.Unicode(64))
+
+
+class VectorDoc(VectorDocument):
+    """Every column the extension offers, indexes included."""
+
+    __tablename__ = "e2e_vector_doc"
+    __vector_dim__ = 3
+    __text_regconfig__ = "english"
+
+    @declared_attr.directive
+    def __table_args__(cls) -> tuple[sa.Index, ...]:
+        return (cls.embedding_index(), cls.attributes_index(), cls.text_index())
+
+
+class VectorNoteRepository(VectorRepository[VectorNote]):
+    default_order_by = VectorNote.name
+
+
+class VectorDocRepository(HybridVectorRepository[VectorDoc]):
+    default_order_by = VectorDoc.created_at
+
+
 def _tables(*models: type[Base]) -> tuple[sa.Table, ...]:
     return tuple(Base.metadata.tables[model.__tablename__] for model in models)
 
@@ -250,6 +290,9 @@ TABLES: tuple[sa.Table, ...] = _tables(
     AuditFollow,
     AuditArticle,
     UUIDAuditArticle,
+    VectorNote,
+    VectorDoc,
+    VectorCollection,
 )
 
 #: Tables whose DDL carries a server side UUID default, which not every

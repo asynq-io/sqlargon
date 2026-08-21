@@ -21,6 +21,40 @@ Repository: https://github.com/asynq-io/sqlargon
 
 ---
 
+## Features
+
+- **Repository pattern** — one object wraps async sessions, core queries and ORM models;
+  sessions are context-local and resolved at call time, so nothing gets passed around
+- **High-level CRUD** — `create`, `get`, `get_or_create`, `create_or_update`, `all`,
+  `list`, `count`, `update_one`, `update_many`, `delete_one`, `delete_many` and `remove`
+  out of the box
+- **Bulk operations** — `bulk_create`, `bulk_create_or_update` and `bulk_update` with
+  per-repository conflict handling
+- **Query builder** — fluent, dialect-aware statements for upserts, `RETURNING`, advisory
+  locks and streaming, with terminal helpers that cast results to `.scalars()`, `.one()`,
+  `.mappings()`, ...
+- **Multi-dialect** — PostgreSQL, SQLite, MySQL and MariaDB, with capability-gated SQL
+  generation per backend
+- **Transactions** — `@atomic` and database-scoped `atomic()` blocks, plus named advisory
+  locks
+- **Unit of work** — repositories declared as annotations on a unit of work share one
+  session and one transaction
+- **Database routing** — clusters with read replicas, shards and vertical partitioning;
+  `using()`, `read_only` and per-request `use_context`
+- **Pagination** — page-number, offset/limit and keyset cursor strategies
+- **Outbox** — transactional outbox with a background relay and eventiq integration
+- **Cron** — database-backed scheduler with namespaces and safe multi-instance claiming
+- **Column types and mixins** — UUID (v4/v7), timestamp, orjson JSON and pydantic-validated
+  columns; mixins for UUID keys, created/updated timestamps and soft delete
+- **Soft delete** — tombstone-based deletes via `SoftDeleteRepository`
+- **Versioned models** — optimistic concurrency with UUID or PostgreSQL `xmin` versions
+- **Auditable models** — append-only versioned history with point-in-time reads and restore
+- **Vector search** — embeddings with cosine, L2, dot and L1 similarity, full-text and
+  hybrid reciprocal-rank-fusion search on PostgreSQL and SQLite
+- **FastAPI-ready** — repositories and units of work work directly as dependencies
+- **Alembic migrations** — async-first migration setup
+- **OpenTelemetry** — optional SQLAlchemy instrumentation
+
 ## About
 
 This library provides glue code to use sqlalchemy async sessions, core queries and orm models
@@ -36,6 +70,7 @@ from one object which provides somewhat of repository pattern. This solution has
   Repository class can be replaced at any moment with any object providing similar interface
 - engines and routing policy are separate, so the same repository runs against one database,
   a primary with read replicas, or a set of shards
+
 
 ## Installation
 
