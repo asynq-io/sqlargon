@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 import sqlalchemy as sa
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from sqlalchemy.sql._typing import (
         _ColumnExpressionArgument,
         _DMLTableArgument,
@@ -18,6 +20,7 @@ if TYPE_CHECKING:
         ReturningUpdate,
     )
 
+    from .types.vector import DistanceMetric
     from .typing import OnConflict, OnConflictOptions, Values, WithForUpdate
 
 from enum import Flag, auto
@@ -28,6 +31,10 @@ class Option(Flag):
     RETURNING = auto()
     CONFLICTS = auto()
     LOCKS = auto()
+    #: similarity search over an embedding column
+    VECTORS = auto()
+    #: ranked full text search
+    FULL_TEXT = auto()
 
 
 class QueryBuilderError(Exception):
@@ -36,6 +43,10 @@ class QueryBuilderError(Exception):
 
 class UnsupportedOption(QueryBuilderError):
     pass
+
+
+class UnsupportedDialectError(QueryBuilderError):
+    """The dialect cannot express the query that was asked of it."""
 
 
 class QueryBuilder:
@@ -260,6 +271,103 @@ class QueryBuilder:
         page_query = query.offset(offset).limit(limit)
         total_query = self.count(query.subquery()) if include_total else None
         return page_query, total_query
+
+    def identity_column(self, model: Any) -> sa.Column[Any]:
+        """The single column identifying a row of ``model``.
+
+        Rank fusion joins its candidate sets on it, so a model keyed by
+        more than one column cannot take part.
+        """
+        primary_key = model.__table__.primary_key.columns
+        if len(primary_key) != 1:
+            msg = f"{model.__name__} must have a single-column primary key"
+            raise TypeError(msg)
+        return next(iter(primary_key))
+
+    def query_vector(
+        self, model: Any, embedding: Sequence[float]
+    ) -> sa.BindParameter[Any]:
+        """``embedding``, bound as the type of the embedding column.
+
+        Reading the type off the column rather than naming it keeps the
+        backend's own encoding -- a pgvector literal on PostgreSQL, a
+        packed float32 blob on SQLite.
+        """
+        return sa.bindparam(
+            "search_embedding",
+            list(embedding),
+            type_=model.embedding.type,
+            unique=True,
+        )
+
+    def _unsupported(self, feature: str) -> UnsupportedDialectError:
+        msg = f"{feature} is not supported by {type(self).__name__}"
+        return UnsupportedDialectError(msg)
+
+    def vector_distance(
+        self,
+        model: Any,
+        embedding: Sequence[float],
+        metric: DistanceMetric | None = None,
+    ) -> sa.ColumnElement[float]:
+        """How far the model's embedding is from ``embedding``."""
+        feature = "a vector distance expression"
+        raise self._unsupported(feature)
+
+    def vector_search(
+        self,
+        model: Any,
+        embedding: Sequence[float],
+        *filters: _ColumnExpressionArgument[bool],
+        limit: int,
+        metric: DistanceMetric | None = None,
+    ) -> sa.Select[Any]:
+        """Rows of ``model`` nearest ``embedding``, with their distance.
+
+        The distance is selected as a second column, and ``filters`` are
+        applied before the limit so narrowing the search cannot return
+        fewer rows than it should.
+        """
+        feature = "vector search"
+        raise self._unsupported(feature)
+
+    def vector_init(self, model: Any) -> sa.Executable | None:
+        """A statement declaring the embedding column to the backend.
+
+        Only sqlite-vector needs one, and it has to run on the connection
+        the search will run on -- which is why this is a statement rather
+        than part of the schema. ``None`` means no declaration is needed.
+        """
+        return None
+
+    def text_search(
+        self,
+        model: Any,
+        query: str,
+        *filters: _ColumnExpressionArgument[bool],
+        limit: int,
+    ) -> sa.Select[Any]:
+        """Rows of ``model`` matching ``query``, with their score."""
+        feature = "full text search"
+        raise self._unsupported(feature)
+
+    def rrf_search(  # noqa: PLR0913 -- keyword-only tuning knobs, each with a default
+        self,
+        model: Any,
+        embedding: Sequence[float],
+        query: str,
+        *filters: _ColumnExpressionArgument[bool],
+        k: int = 60,
+        limit: int = 10,
+        candidates: int = 50,
+    ) -> sa.Select[Any]:
+        """Rows of ``model`` ranked by fusing similarity with full text.
+
+        Scores each row ``sum(1 / (k + rank))`` over the two rankings it
+        appears in, each cut to ``candidates`` rows.
+        """
+        feature = "reciprocal rank fusion"
+        raise self._unsupported(feature)
 
     def lock(self, key: str) -> sa.TextClause:
         msg = f"Cannot obtain lock for key {key}"
