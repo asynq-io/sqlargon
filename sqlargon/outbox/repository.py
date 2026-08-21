@@ -11,7 +11,7 @@ from sqlargon.mixins import CreatedUpdatedMixin
 from sqlargon.orm import Model
 from sqlargon.repository import SQLAlchemyRepository
 
-from .config import Operation, OutboxConfig
+from .config import Operation, OutboxConfig, format_topic
 from .models import OutboxEvent
 
 if TYPE_CHECKING:
@@ -175,7 +175,12 @@ class OutboxRepository(SQLAlchemyRepository[Model], abstract=True):
 
     @property
     def topic(self) -> str:
-        """The topic every event of this repository is published on."""
+        """The topic events of this repository are published on.
+
+        The configured topic, or the table name when none is configured. A
+        topic with ``{placeholders}`` is a template: each event's topic is
+        filled from the row it was written from.
+        """
         return self.outbox.topic or self.model.__tablename__
 
     @property
@@ -233,14 +238,16 @@ class OutboxRepository(SQLAlchemyRepository[Model], abstract=True):
         engine's ``json_serializer``: a :class:`~sqlargon.Database` built
         straight from a URL carries the standard library's, which knows
         neither UUIDs nor datetimes. The extra attributes are read here too,
-        while the context the write ran in is still the current one.
+        and a templated topic is filled from the row, while the context the
+        write ran in is still the current one.
         """
         columns = self.payload_columns
         sources = self.attribute_sources
         event_types = self.event_types
+        topic = self.topic
         return [
             {
-                "topic": self.topic,
+                "topic": format_topic(topic, row),
                 "type": event_type,
                 "source": self.outbox.source,
                 "data": to_jsonable_python(

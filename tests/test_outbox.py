@@ -21,6 +21,7 @@ from sqlargon.outbox import (
     OutboxEventRepository,
     OutboxRelay,
     OutboxRepository,
+    format_topic,
 )
 from sqlargon.types import GUID
 from sqlargon.typing import OnConflictOptions
@@ -54,6 +55,15 @@ class OutboxTag(UUIDModelMixin, CreatedUpdatedMixin, Base):
     __table_args__ = (sa.UniqueConstraint("label"),)
 
     label = sa.Column(sa.Unicode(255), nullable=False)
+
+
+class OrganizationUser(UUIDModelMixin, CreatedUpdatedMixin, Base):
+    """A row whose events land on a topic templated from its own key."""
+
+    __tablename__ = "test_outbox_org_user"
+
+    name = sa.Column(sa.Unicode(255), nullable=True)
+    organization_id = sa.Column(GUID(), nullable=True)
 
 
 class BareModel(UUIDModelMixin, CreatedUpdatedMixin, Base):
@@ -113,6 +123,13 @@ class TagRepository(OutboxRepository[OutboxTag]):
         return {"index_elements": {"label"}, "set_": {"label"}}
 
 
+class OrganizationUserRepository(OutboxRepository[OrganizationUser]):
+    outbox = OutboxConfig(
+        topic="events.organizations.{organization_id}.users.{id}.created",
+        type_prefix="org_user",
+    )
+
+
 class EventRepository(OutboxEventRepository):
     pass
 
@@ -126,6 +143,7 @@ async def tables(db: Database):
         OutboxUser.__table__,
         InsertOnlyNote.__table__,
         OutboxTag.__table__,
+        OrganizationUser.__table__,
         OutboxEvent.__table__,
     )
     async with db.engine.begin() as conn:
@@ -155,6 +173,11 @@ def notes():
 @pytest.fixture
 def tags():
     return TagRepository()
+
+
+@pytest.fixture
+def org_users():
+    return OrganizationUserRepository()
 
 
 @pytest.fixture
@@ -238,6 +261,74 @@ def test_a_subclass_overrides_the_config_of_its_base():
 def test_attributes_cannot_shadow_the_core_ones():
     with pytest.raises(ValueError, match="source, type"):
         OutboxConfig(attributes={"type": "name", "source": "name", "tenant": "name"})
+
+
+# --- topic templating ---
+
+
+def test_format_topic_passes_a_plain_topic_through():
+    assert format_topic("users", object()) == "users"
+
+
+def test_format_topic_fills_placeholders_from_the_row():
+    row = OrganizationUser(id=uuid4(), organization_id=uuid4())
+
+    assert (
+        format_topic("events.organizations.{organization_id}.deleted", row)
+        == f"events.organizations.{row.organization_id}.deleted"
+    )
+
+
+def test_format_topic_fills_an_id_placeholder():
+    row = OrganizationUser(id=uuid4(), organization_id=uuid4())
+
+    assert format_topic("events.users.{id}", row) == f"events.users.{row.id}"
+
+
+def test_a_missing_attribute_raises_like_str_format_does():
+    row = OrganizationUser()
+
+    with pytest.raises(KeyError, match="organization_id"):
+        format_topic("events.organizations.{organization_id}", row)
+
+
+async def test_a_templated_topic_is_filled_per_event(org_users, events):
+    organization = uuid4()
+    user = await org_users.create(name="John", organization_id=organization)
+
+    (event,) = await stored(events)
+    assert event.topic == (
+        f"events.organizations.{organization}.users.{user.id}.created"
+    )
+
+
+async def test_each_row_of_a_bulk_write_gets_its_own_topic(org_users, events):
+    first, second = uuid4(), uuid4()
+
+    await org_users.bulk_create(
+        [
+            {"name": "a", "organization_id": first},
+            {"name": "b", "organization_id": second},
+        ]
+    )
+
+    recorded = {event.data["name"]: event.topic for event in await stored(events)}
+    assert recorded["a"].startswith(f"events.organizations.{first}.")
+    assert recorded["b"].startswith(f"events.organizations.{second}.")
+    assert recorded["a"] != recorded["b"]
+
+
+async def test_a_templated_topic_is_filled_at_write_time(org_users, events):
+    organization = uuid4()
+    user = await org_users.create(name="John", organization_id=organization)
+
+    await org_users.update_one({"name": "Jane"}, id=user.id)
+
+    topics = [event.topic for event in await stored(events)]
+    assert topics == [
+        f"events.organizations.{organization}.users.{user.id}.created",
+        f"events.organizations.{organization}.users.{user.id}.created",
+    ]
 
 
 # --- capture ---
