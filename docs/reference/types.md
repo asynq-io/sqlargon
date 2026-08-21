@@ -144,6 +144,9 @@ Both accept `sa_column_type=` to store in something other than `JSON` (e.g. `sa.
 | `VersionedMixin` | *(abstract marker — no columns)* | |
 | `UUIDVersionedMixin` | `version_id` — `GUID`, `uuid4` default, `GenerateUUID()` server default | `__mapper_args__` with `version_id_col` + UUID generator |
 | `XminVersionedMixin` | `xmin` — PostgreSQL system column, `String`, `system=True`, `FetchedValue()` | `__mapper_args__` with `version_id_col` + `version_id_generator=False` |
+| `AuditableMixin` | *(abstract marker — no columns; extends `SoftDeleteMixin` and `VersionedMixin`)* | `audit_key()`, `latest_version()`, `is_latest()` |
+| `IntegerAuditableMixin` | `version` — `Integer` primary key, starting at 1 | successor is `version + 1` |
+| `UUIDAuditableMixin` | `version` — `GUID` primary key, `uuid7` default, `GenerateUUIDV7()` server default | successor is a fresh UUIDv7 |
 
 ```python
 from sqlargon.mixins import CreatedUpdatedMixin, SoftDeleteMixin, UUIDV7ModelMixin
@@ -213,3 +216,22 @@ Both set `__mapper_args__` with `version_id_col`, enabling SQLAlchemy's ORM-leve
 versioning when using `AsyncSession` directly. `VersionedModel` is the matching type
 variable, bound to `VersionedBase`. See [Versioned models](../usage.md#versioned-models)
 for the repository API.
+
+`AuditableMixin` is an abstract marker too — use `IntegerAuditableMixin` or
+`UUIDAuditableMixin`, or the bases combining them with `Base`:
+
+```python
+from sqlargon import AuditableBase, UUIDAuditableBase
+
+
+class Article(UUIDModelMixin, AuditableBase):  # versions 1, 2, 3 ...
+    title: Mapped[str] = mapped_column(sa.Unicode(255))
+
+
+class Draft(UUIDModelMixin, UUIDAuditableBase):  # UUIDv7 versions
+    title: Mapped[str] = mapped_column(sa.Unicode(255))
+```
+
+`AnyAuditableBase` is the abstract base both share and `AuditableModel` the matching type
+variable. Pair either with [`AuditableRepository`](../auditable.md), which appends a new
+version instead of updating a row.

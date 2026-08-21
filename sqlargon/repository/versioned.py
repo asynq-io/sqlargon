@@ -67,11 +67,11 @@ class VersionedRepository(SQLAlchemyRepository[VersionedModel], abstract=True):
         super().__init_subclass__(abstract=abstract, **kwargs)
         if abstract:
             return
-        if not issubclass(cls.model, VersionedMixin):
+        mixin, name = cls._required_mixin()
+        if not issubclass(cls.model, mixin):
             msg = (
-                f"{cls.model.__name__} must inherit from VersionedMixin "
-                f"(UUIDVersionedMixin or XminVersionedMixin) to be used "
-                f"with {cls.__name__}"
+                f"{cls.model.__name__} must inherit from {name} "
+                f"to be used with {cls.__name__}"
             )
             raise TypeError(msg)
         if cls._version_col() is None:
@@ -81,6 +81,14 @@ class VersionedRepository(SQLAlchemyRepository[VersionedModel], abstract=True):
                 f"{cls.__name__} could not tell a stale row from a fresh one"
             )
             raise TypeError(msg)
+
+    @classmethod
+    def _required_mixin(cls) -> tuple[type, str]:
+        """The mixin a model must carry, and how to name it when it does not."""
+        return (
+            VersionedMixin,
+            "VersionedMixin (UUIDVersionedMixin or XminVersionedMixin)",
+        )
 
     @classmethod
     def _version_col(cls) -> Any:
