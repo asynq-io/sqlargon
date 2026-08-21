@@ -79,6 +79,43 @@ The topic, the event type of each recorded operation and the payload columns
 are derived from the config, and readable for inspection as `repository.topic`,
 `repository.event_types` and `repository.payload_columns`.
 
+### Topic templating
+
+A `topic` may carry `{placeholders}` naming attributes of the written row, for
+a topic that identifies its subject rather than the table that holds it — say
+one topic per tenant or per entity. Each placeholder is filled from the row the
+event was written from, at write time, using `str.format`:
+
+```python
+class UserRepository(OutboxRepository[User]):
+    outbox = OutboxConfig(
+        topic="events.organizations.{organization_id}.deleted",
+        exclude={"password"},
+    )
+
+
+await UserRepository().create(
+    name="John", password=hashed, organization_id=21
+)
+# -> topic "events.organizations.21.deleted"
+```
+
+A topic without placeholders is used verbatim, so nothing changes for topics
+that do not use them. A placeholder names a column — or any other attribute of
+the row — and its value is stringified as it is: a `UUID` becomes its
+canonical string form. `{id}` reads the row's `id`, `{organization_id}` its
+`organization_id`, and so on.
+
+The value is read the same way the payload and the extra attributes are: from
+the row the write produced (before it, for a delete). It is read **when the
+write happens**, not when the relay publishes the event, so a templated topic
+always reflects the state at write time. A repository serves one event per
+written row, so a bulk write of rows from different organizations lands on
+their own topics.
+
+`format_topic(topic, row)` does the substitution on its own and is exported
+from `sqlargon.outbox`.
+
 ### Extra attributes
 
 Some values belong *next to* the payload rather than inside it — a `tenant_id`
