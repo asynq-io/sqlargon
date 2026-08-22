@@ -6,6 +6,19 @@ import sqlalchemy as sa
 from sqlalchemy.exc import StatementError
 
 from sqlargon import Database
+from sqlargon.types.json import (
+    json_array_append,
+    json_array_length,
+    json_get,
+    json_has_key,
+    json_insert_key,
+    json_keys,
+    json_remove_key,
+    json_replace_key,
+    json_set_key,
+    json_update,
+)
+from sqlargon.utils import json_loads
 
 from .backends import Backend
 from .models import Address, Document, DocumentRepository, ServerDefaults, User
@@ -137,3 +150,146 @@ async def test_json_has_any_key_rejects_unknown_keys(documents: DocumentReposito
         documents.select().where(Document.payload.has_any_key(["country"])).all()
     )
     assert matched == []
+
+
+async def mutate(documents: DocumentRepository, expression: object) -> Document:
+    """Apply ``expression`` to every document and read the row back."""
+    await documents.update({Document.payload: expression}).execute()
+    stored = await documents.first()
+    assert stored is not None
+    return stored
+
+
+async def test_json_set_key_adds_a_key(documents: DocumentRepository):
+    await store(documents, payload={"a": 1})
+    stored = await mutate(documents, json_set_key(Document.payload, "b", 2))
+    assert stored.payload == {"a": 1, "b": 2}
+
+
+async def test_json_set_key_overwrites_a_key(documents: DocumentRepository):
+    await store(documents, payload={"a": 1})
+    stored = await mutate(documents, json_set_key(Document.payload, "a", 9))
+    assert stored.payload == {"a": 9}
+
+
+async def test_json_set_key_stores_a_nested_document(documents: DocumentRepository):
+    await store(documents, payload={"a": 1})
+    stored = await mutate(documents, json_set_key(Document.payload, "b", {"x": [1, 2]}))
+    # the value is a document, not the serialized text as a JSON string
+    assert stored.payload == {"a": 1, "b": {"x": [1, 2]}}
+
+
+async def test_json_update_merges_shallowly(documents: DocumentRepository):
+    await store(documents, payload={"a": {"x": 1}, "b": 2})
+    stored = await mutate(
+        documents, json_update(Document.payload, {"a": {"y": 9}, "c": 3})
+    )
+    # "a" is replaced wholesale rather than merged into
+    assert stored.payload == {"a": {"y": 9}, "b": 2, "c": 3}
+
+
+async def test_json_update_with_no_keys_leaves_the_document(
+    documents: DocumentRepository,
+):
+    await store(documents, payload={"a": 1})
+    stored = await mutate(documents, json_update(Document.payload, {}))
+    assert stored.payload == {"a": 1}
+
+
+async def test_json_remove_key_drops_keys(documents: DocumentRepository):
+    await store(documents, payload={"a": 1, "b": 2, "c": 3})
+    stored = await mutate(documents, json_remove_key(Document.payload, "a", "c"))
+    assert stored.payload == {"b": 2}
+
+
+async def test_json_remove_key_ignores_a_missing_key(documents: DocumentRepository):
+    await store(documents, payload={"a": 1})
+    stored = await mutate(documents, json_remove_key(Document.payload, "nope"))
+    assert stored.payload == {"a": 1}
+
+
+async def test_json_insert_key_only_adds_a_missing_key(documents: DocumentRepository):
+    await store(documents, payload={"a": 1})
+    stored = await mutate(documents, json_insert_key(Document.payload, "b", 2))
+    assert stored.payload == {"a": 1, "b": 2}
+
+
+async def test_json_insert_key_leaves_an_existing_key(documents: DocumentRepository):
+    await store(documents, payload={"a": 1})
+    stored = await mutate(documents, json_insert_key(Document.payload, "a", 9))
+    assert stored.payload == {"a": 1}
+
+
+async def test_json_replace_key_only_updates_an_existing_key(
+    documents: DocumentRepository,
+):
+    await store(documents, payload={"a": 1})
+    stored = await mutate(documents, json_replace_key(Document.payload, "a", 9))
+    assert stored.payload == {"a": 9}
+
+
+async def test_json_replace_key_does_not_add_a_missing_key(
+    documents: DocumentRepository,
+):
+    await store(documents, payload={"a": 1})
+    stored = await mutate(documents, json_replace_key(Document.payload, "b", 2))
+    assert stored.payload == {"a": 1}
+
+
+async def test_json_mutations_compose_in_one_statement(documents: DocumentRepository):
+    await store(documents, payload={"a": 1, "b": 2})
+    stored = await mutate(
+        documents, json_remove_key(json_update(Document.payload, {"c": 3}), "a")
+    )
+    assert stored.payload == {"b": 2, "c": 3}
+
+
+async def test_json_array_append_appends_one_element(documents: DocumentRepository):
+    await store(documents, tags=["red"])
+    await documents.update(
+        {Document.tags: json_array_append(Document.tags, "green")}
+    ).execute()
+    stored = await documents.first()
+    assert stored is not None
+    assert stored.tags == ["red", "green"]
+
+
+async def test_json_array_append_nests_a_list(documents: DocumentRepository):
+    await store(documents, tags=["red"])
+    await documents.update(
+        {Document.tags: json_array_append(Document.tags, ["a", "b"])}
+    ).execute()
+    stored = await documents.first()
+    assert stored is not None
+    # appended as one element rather than concatenated
+    assert stored.tags == ["red", ["a", "b"]]
+
+
+async def test_json_has_key_addresses_object_keys(documents: DocumentRepository):
+    # the gap has_any_key / has_all_keys leave on sqlite, whose json_each
+    # fallback matches values instead of keys
+    await store(documents, payload={"a": "b"})
+    assert await documents.select().where(json_has_key(Document.payload, "a")).all()
+    assert not await documents.select().where(json_has_key(Document.payload, "b")).all()
+
+
+async def test_json_get_reads_a_nested_document(documents: DocumentRepository):
+    await store(documents, payload={"a": {"x": 1}})
+    value = await documents.select(json_get(Document.payload, "a")).scalar()
+    # sqlite and mysql hand back the JSON text, postgres a decoded document
+    if isinstance(value, str):
+        value = json_loads(value)
+    assert value == {"x": 1}
+
+
+async def test_json_array_length_counts_elements(documents: DocumentRepository):
+    await store(documents, tags=["a", "b", "c"])
+    assert await documents.select(json_array_length(Document.tags)).scalar() == 3
+
+
+async def test_json_keys_lists_top_level_keys(documents: DocumentRepository):
+    await store(documents, payload={"a": 1, "b": 2})
+    keys = await documents.select(json_keys(Document.payload)).scalar()
+    if isinstance(keys, str):
+        keys = json_loads(keys)
+    assert sorted(keys) == ["a", "b"]

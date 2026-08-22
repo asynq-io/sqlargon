@@ -366,7 +366,9 @@ ordering.
 
 `sqlargon.types` provides dialect-aware column types: `GUID` with `GenerateUUID` /
 `GenerateUUIDV7` server defaults, `Timestamp` with a `now()` server default and `JSON`
-(orjson-serialized). `sqlargon.types.pydantic` adds `Pydantic` and `ValidatedType` for
+(orjson-serialized), whose comparator carries portable JSON operators — containment and
+key tests, plus server-side mutation (`set_key`, `update`, `remove_key`) that rewrites a
+document in the `UPDATE` itself. `sqlargon.types.pydantic` adds `Pydantic` and `ValidatedType` for
 pydantic-validated columns. `sqlargon.mixins` bundles them into `UUIDModelMixin`,
 `UUIDV7ModelMixin`, `CreatedUpdatedMixin` and `SoftDeleteMixin`.
 

@@ -158,8 +158,12 @@ class TranslatedString(TypeDecorator[Translation]):
     Every column operator is rewritten to act on the text of the locale active
     when the statement runs, so plain ``select(...).where(Model.field == value)``
     needs no join. The JSON methods inherited from `JSON.ComparatorFactory` --
-    ``contains``, ``has_any_key``, ``has_all_keys``, ``json_value`` and
-    indexing -- still address the whole locale map.
+    the reads ``contains``, ``has_any_key``, ``has_all_keys``, ``has_key``,
+    ``json_value``, ``get``, ``keys``, ``array_length``, the mutations
+    ``update``, ``set_key``, ``remove_key``, ``insert_key``, ``replace_key``,
+    ``array_append``, and indexing -- all still address the whole locale map.
+    A mutation therefore rewrites one locale's entry, keyed by locale name,
+    rather than the active locale's text.
     """
 
     impl = JSON
