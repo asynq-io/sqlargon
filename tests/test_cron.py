@@ -54,6 +54,27 @@ async def test_sync_creates_declared_tasks(cron):
     assert tasks["cleanup"].next_run_at > utc_now()
 
 
+async def test_task_declares_a_function_given_outright(cron):
+    async def purge() -> None: ...
+
+    assert cron.task("0 3 * * *", "purge_outbox", purge) is purge
+
+    await cron.sync()
+    (task,) = await cron.tasks()
+    assert task.name == "purge_outbox"
+    assert task.schedule == "0 3 * * *"
+    assert task.declarative is True
+
+
+async def test_a_function_given_outright_keeps_its_own_name(cron):
+    async def purge() -> None: ...
+
+    cron.task(EVERY_MINUTE, func=purge)
+
+    await cron.sync()
+    assert [task.name for task in await cron.tasks()] == ["purge"]
+
+
 async def test_sync_updates_and_deletes(cron):
     @cron.task("*/5 * * * *")
     async def cleanup() -> None: ...
@@ -258,6 +279,26 @@ async def test_run_executes_due_task(cron):
         {"next_run_at": utc_now() - timedelta(seconds=1)},
         namespace="test",
         name="job",
+    )
+    async with cron.running():
+        with anyio.fail_after(2):
+            await ran.wait()
+
+
+async def test_run_executes_a_bound_method_declared_outright(cron):
+    ran = anyio.Event()
+
+    class Relay:
+        async def purge(self) -> None:
+            ran.set()
+
+    cron.task(EVERY_MINUTE, "purge_outbox", Relay().purge)
+
+    await cron.sync()
+    await cron.repository.update_one(
+        {"next_run_at": utc_now() - timedelta(seconds=1)},
+        namespace="test",
+        name="purge_outbox",
     )
     async with cron.running():
         with anyio.fail_after(2):

@@ -206,6 +206,23 @@ async def test_is_new_false_after_update(repository):
     assert updated.is_new is False
 
 
+@pytest.mark.usefixtures("tables")
+async def test_is_new_false_after_an_upsert(repository):
+    """An upsert leaves ``created_at`` alone, so it cannot fake a new row."""
+    obj = await repository.create(name="john", created_at=OLD, updated_at=OLD)
+
+    upserted = await repository.create_or_update(id=obj.id, name="jane")
+
+    assert upserted.created_at == OLD
+    assert upserted.updated_at > upserted.created_at
+    assert upserted.is_new is False
+
+
+def test_the_conflict_set_leaves_created_at_alone():
+    assert "created_at" not in _MixinRepository._get_default_set()
+    assert "updated_at" in _MixinRepository._get_default_set()
+
+
 def test_is_new_sql_expression():
     assert (
         str(_MixinModel.is_new.expression)

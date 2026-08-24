@@ -3,35 +3,44 @@
 Every test runs once per selected backend. A container is started once per
 session and shared, while the :class:`~sqlargon.Database` is per test: an
 engine's pool holds connections bound to the event loop that opened them, and
-pytest-asyncio gives each test a fresh loop.
+the anyio plugin gives each test a fresh loop.
 """
 
 from __future__ import annotations
 
-import asyncio
+from functools import partial
 from typing import TYPE_CHECKING
 
+import anyio
 import pytest
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from sqlargon import Base, Database
+from sqlargon.vectors import init_vectors
 
 from .backends import Backend, parse_backends
 from .models import (
     SERVER_DEFAULT_TABLES,
     TABLES,
     XMIN_TABLES,
+    AuditArticleRepository,
+    AuditCommentRepository,
+    AuditFollowRepository,
     DocumentRepository,
+    OutboxUserRepository,
+    RawAuditArticleRepository,
     SoftUserRepository,
     UserRepository,
+    UUIDAuditArticleRepository,
+    VectorDocRepository,
+    VectorNoteRepository,
     VersionedUserRepository,
     XminUserRepository,
 )
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
-
-    import sqlalchemy as sa
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
@@ -41,7 +50,10 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     backends = parse_backends(metafunc.config.getoption("e2e_backends"))
     metafunc.parametrize(
         "backend",
-        backends,
+        [
+            pytest.param(backend, marks=pytest.mark.xdist_group(backend.name))
+            for backend in backends
+        ],
         ids=[backend.name for backend in backends],
         indirect=True,
         scope="session",
@@ -76,17 +88,26 @@ def tables(backend: Backend) -> tuple[sa.Table, ...]:
 
 
 @pytest.fixture(scope="session")
-def schema(database_url: str, tables: tuple[sa.Table, ...]) -> Generator[None]:
+def schema(
+    backend: Backend, database_url: str, tables: tuple[sa.Table, ...]
+) -> Generator[None]:
     """Create the e2e tables once per backend, and drop them afterwards.
 
     DDL runs in its own throwaway engine and event loop, so the schema can be
     session scoped without an engine outliving the loop that built it.
+
+    The ``vector`` extension comes first: a ``VECTOR`` column cannot be
+    declared before the type it names exists.
     """
 
     async def run(*, create: bool) -> None:
         engine = create_async_engine(database_url)
         try:
             async with engine.begin() as connection:
+                if create and backend.dialect == "postgresql":
+                    await connection.execute(
+                        sa.text("CREATE EXTENSION IF NOT EXISTS vector")
+                    )
                 await connection.run_sync(
                     Base.metadata.create_all if create else Base.metadata.drop_all,
                     tables=list(tables),
@@ -94,9 +115,9 @@ def schema(database_url: str, tables: tuple[sa.Table, ...]) -> Generator[None]:
         finally:
             await engine.dispose()
 
-    asyncio.run(run(create=True))
+    anyio.run(partial(run, create=True))
     yield
-    asyncio.run(run(create=False))
+    anyio.run(partial(run, create=False))
 
 
 @pytest.fixture(autouse=True)
@@ -181,3 +202,70 @@ def versioned_users() -> VersionedUserRepository:
 @pytest.fixture
 def xmin_users() -> XminUserRepository:
     return XminUserRepository()
+
+
+@pytest.fixture
+def outbox_users() -> OutboxUserRepository:
+    return OutboxUserRepository()
+
+
+@pytest.fixture
+def audit_articles() -> AuditArticleRepository:
+    return AuditArticleRepository()
+
+
+@pytest.fixture
+def raw_audit_articles() -> RawAuditArticleRepository:
+    return RawAuditArticleRepository()
+
+
+@pytest.fixture
+def uuid_audit_articles() -> UUIDAuditArticleRepository:
+    return UUIDAuditArticleRepository()
+
+
+@pytest.fixture
+def audit_comments() -> AuditCommentRepository:
+    return AuditCommentRepository()
+
+
+@pytest.fixture
+def audit_follows() -> AuditFollowRepository:
+    return AuditFollowRepository()
+
+
+@pytest.fixture
+def needs_foreign_keys(backend: Backend) -> None:
+    if backend.name == "sqlite":
+        pytest.skip("sqlite does not enforce foreign keys unless asked to")
+
+
+@pytest.fixture
+def needs_vector_search(backend: Backend) -> None:
+    if not backend.vector_search:
+        pytest.skip(f"{backend.name} cannot search vectors")
+    if backend.dialect == "sqlite":
+        pytest.importorskip(
+            "sqlite_vector", reason="sqlite vector search needs 'sqliteai-vector'"
+        )
+
+
+@pytest.fixture
+async def vector_db(db: Database) -> Database:
+    """The database under test, prepared for vector search.
+
+    On PostgreSQL this creates the extension; on SQLite it registers the
+    loadable one on the pool, which every later connection then gets.
+    """
+    await init_vectors(db)
+    return db
+
+
+@pytest.fixture
+def vector_notes(vector_db: Database) -> VectorNoteRepository:
+    return VectorNoteRepository().using(db=vector_db)
+
+
+@pytest.fixture
+def vector_docs(vector_db: Database) -> VectorDocRepository:
+    return VectorDocRepository().using(db=vector_db)

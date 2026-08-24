@@ -72,7 +72,14 @@ def test_get_query_builder_is_cached():
 @pytest.mark.parametrize(
     ("dialect", "expected"),
     [
-        ("postgresql", Option.RETURNING | Option.CONFLICTS | Option.LOCKS),
+        (
+            "postgresql",
+            Option.RETURNING
+            | Option.CONFLICTS
+            | Option.LOCKS
+            | Option.VECTORS
+            | Option.FULL_TEXT,
+        ),
         ("mysql", Option.CONFLICTS | Option.LOCKS),
         ("oracle", Option.NONE),
     ],

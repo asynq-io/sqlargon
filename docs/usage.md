@@ -182,7 +182,9 @@ row on the `on_` columns — one round trip for the whole batch.
 
 `insert(..., ignore_conflicts=True)`, `upsert(...)` and the bulk helpers derive their
 `ON CONFLICT` clause from the `on_conflict` property, which defaults to the model's primary
-key as `index_elements` and every remaining column in `set_`. Override it per repository:
+key as `index_elements` and every remaining column in `set_` — bar `created_at`, which a
+`CreatedUpdatedMixin` row keeps from the insert that created it, so `is_new` stays
+truthful after an upsert. Override it per repository:
 
 ```python
 from sqlargon.typing import OnConflictOptions

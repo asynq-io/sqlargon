@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from functools import partial
 from inspect import iscoroutinefunction
-from typing import TYPE_CHECKING, Any, TypeGuard, TypeVar
+from typing import TYPE_CHECKING, Any, TypeGuard, TypeVar, overload
 
 import anyio
 from anyio import TASK_STATUS_IGNORED, CapacityLimiter, to_thread
@@ -71,10 +71,11 @@ class _Registration:
 class Cron:
     """Database-backed cron scheduler for a single namespace.
 
-    Declarative mode: decorate functions with :meth:`task` and call
-    :meth:`run` (or :meth:`sync`); declared tasks are created or updated and
-    tasks no longer declared are deleted. Imperative mode: manage schedules
-    at runtime with :meth:`schedule` and :meth:`unschedule`.
+    Declarative mode: declare functions with :meth:`task`, as a decorator or
+    a plain call, and call :meth:`run` (or :meth:`sync`); declared tasks are
+    created or updated and tasks no longer declared are deleted. Imperative
+    mode: manage schedules at runtime with :meth:`schedule` and
+    :meth:`unschedule`.
 
     Multiple instances may run the same namespace concurrently; due tasks
     are claimed with ``FOR UPDATE SKIP LOCKED`` so each run executes once.
@@ -113,21 +114,41 @@ class Cron:
             self._limiter = CapacityLimiter(self.max_concurrency)
         return self._limiter
 
+    @overload
     def task(
-        self, schedule: str | None = None, *, name: str | None = None
-    ) -> Callable[[F], F]:
-        """Register the decorated function; with ``schedule`` it becomes a
-        declarative task reconciled by :meth:`sync`."""
+        self, schedule: str | None = ..., name: str | None = ...
+    ) -> Callable[[F], F]: ...
 
-        def decorator(func: F) -> F:
-            task_name = self.register(func, name=name)
+    @overload
+    def task(self, schedule: str | None, name: str | None, func: F) -> F: ...
+
+    @overload
+    def task(self, schedule: str | None = ..., *, func: F) -> F: ...
+
+    def task(
+        self,
+        schedule: str | None = None,
+        name: str | None = None,
+        func: TaskFunc | None = None,
+    ) -> Any:
+        """Register a function; with ``schedule`` it becomes a declarative
+        task reconciled by :meth:`sync`.
+
+        Used as a decorator when ``func`` is left out, and called outright
+        otherwise -- for a function that is not yours to decorate::
+
+            cron.task("0 3 * * *", "purge_outbox", relay.purge)
+        """
+
+        def decorator(target: F) -> F:
+            task_name = self.register(target, name=name)
             if schedule is not None:
                 self._registry[task_name] = replace(
                     self._registry[task_name], schedule=validate_schedule(schedule)
                 )
-            return func
+            return target
 
-        return decorator
+        return decorator if func is None else decorator(func)
 
     def register(self, func: TaskFunc, *, name: str | None = None) -> str:
         """Make ``func`` executable by this scheduler and return its name.

@@ -10,9 +10,13 @@ Generated from the source. See [Usage](../usage.md) for a narrative introduction
 
 ::: sqlargon.repository.VersionedRepository
 
+::: sqlargon.repository.AuditableRepository
+
 ::: sqlargon.repository.DeletedRowExistsError
 
 ::: sqlargon.repository.ConcurrentModificationError
+
+::: sqlargon.repository.AppendOnlyError
 
 ::: sqlargon.functools.atomic
 
@@ -104,15 +108,37 @@ Generated from the source. See [Usage](../usage.md) for a narrative introduction
 
 ::: sqlargon.cron.CronTaskRepository
 
-::: sqlargon.cron.validate_schedule
+::: sqlargon.cron.utils.validate_schedule
 
-::: sqlargon.cron.next_run_time
+::: sqlargon.cron.utils.next_run_time
+
+## Outbox
+
+::: sqlargon.outbox.OutboxRepository
+
+::: sqlargon.outbox.OutboxEventRepository
+
+::: sqlargon.outbox.OutboxRelay
+
+::: sqlargon.outbox.OutboxEvent
+
+::: sqlargon.outbox.OutboxConfig
+
+::: sqlargon.outbox.Operation
+
+::: sqlargon.outbox.format_topic
+
+::: sqlargon.integrations.eventiq.to_cloud_event
+
+::: sqlargon.integrations.eventiq.eventiq_publisher
 
 ## ORM and types
 
 ::: sqlargon.orm.Base
 
 ::: sqlargon.mixins
+
+::: sqlargon.audit
 
 ::: sqlargon.types.uuid
 

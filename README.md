@@ -21,6 +21,40 @@ Repository: https://github.com/asynq-io/sqlargon
 
 ---
 
+## Features
+
+- **Repository pattern** — one object wraps async sessions, core queries and ORM models;
+  sessions are context-local and resolved at call time, so nothing gets passed around
+- **High-level CRUD** — `create`, `get`, `get_or_create`, `create_or_update`, `all`,
+  `list`, `count`, `update_one`, `update_many`, `delete_one`, `delete_many` and `remove`
+  out of the box
+- **Bulk operations** — `bulk_create`, `bulk_create_or_update` and `bulk_update` with
+  per-repository conflict handling
+- **Query builder** — fluent, dialect-aware statements for upserts, `RETURNING`, advisory
+  locks and streaming, with terminal helpers that cast results to `.scalars()`, `.one()`,
+  `.mappings()`, ...
+- **Multi-dialect** — PostgreSQL, SQLite, MySQL and MariaDB, with capability-gated SQL
+  generation per backend
+- **Transactions** — `@atomic` and database-scoped `atomic()` blocks, plus named advisory
+  locks
+- **Unit of work** — repositories declared as annotations on a unit of work share one
+  session and one transaction
+- **Database routing** — clusters with read replicas, shards and vertical partitioning;
+  `using()`, `read_only` and per-request `use_context`
+- **Pagination** — page-number, offset/limit and keyset cursor strategies
+- **Outbox** — transactional outbox with a background relay and eventiq integration
+- **Cron** — database-backed scheduler with namespaces and safe multi-instance claiming
+- **Column types and mixins** — UUID (v4/v7), timestamp, orjson JSON and pydantic-validated
+  columns; mixins for UUID keys, created/updated timestamps and soft delete
+- **Soft delete** — tombstone-based deletes via `SoftDeleteRepository`
+- **Versioned models** — optimistic concurrency with UUID or PostgreSQL `xmin` versions
+- **Auditable models** — append-only versioned history with point-in-time reads and restore
+- **Vector search** — embeddings with cosine, L2, dot and L1 similarity, full-text and
+  hybrid reciprocal-rank-fusion search on PostgreSQL and SQLite
+- **FastAPI-ready** — repositories and units of work work directly as dependencies
+- **Alembic migrations** — async-first migration setup
+- **OpenTelemetry** — optional SQLAlchemy instrumentation
+
 ## About
 
 This library provides glue code to use sqlalchemy async sessions, core queries and orm models
@@ -37,6 +71,7 @@ from one object which provides somewhat of repository pattern. This solution has
 - engines and routing policy are separate, so the same repository runs against one database,
   a primary with read replicas, or a set of shards
 
+
 ## Installation
 
 ```shell
@@ -50,7 +85,8 @@ uv add sqlargon
 ```
 
 Optional extras: `postgres`, `sqlite`, `mysql`, `pagination` (cursor pagination),
-`cron`, `opentelemetry`, or `standard` for all of them:
+`cron`, `outbox`, `eventiq`, `opentelemetry`, or `standard` for all of them
+except `eventiq`:
 
 ```shell
 pip install "sqlargon[standard]"
@@ -292,13 +328,87 @@ Available strategies: `PageNumberPagination`, `TotalPageNumberPagination`,
 `LimitOffsetPagination`, `TotalLimitOffsetPagination` and `CursorPagination`
 (keyset, requires `sqlargon[pagination]`).
 
+## Outbox
+
+`sqlargon.outbox` implements the transactional outbox pattern: a write through the repository
+also appends a CloudEvent-shaped row to `outbox_events` **in the same transaction**, so an
+event can neither be lost by a rollback nor published for a row that never committed. A
+background relay then publishes them in write order (requires `sqlargon[outbox]`):
+
+```python
+from sqlargon import Base
+from sqlargon.outbox import OutboxConfig, OutboxRelay, OutboxRepository
+
+
+class User(UUIDModelMixin, CreatedUpdatedMixin, Base):  # is_new tells insert from update
+    name: Mapped[str] = mapped_column(sa.Unicode(255))
+    password: Mapped[str] = mapped_column(sa.Unicode(255))
+
+
+class UserRepository(OutboxRepository[User]):
+    outbox = OutboxConfig(topic="users", exclude={"password"})
+
+
+await UserRepository().create(name="John", password=hashed)
+# -> one outbox_events row, type "user.created", password left out
+
+async with OutboxRelay(publish).running():  # publish is any async callable
+    ...
+```
+
+The relay takes a plain publisher callable, so sqlargon depends on no broker client;
+`sqlargon.integrations.eventiq` adapts the rows to `eventiq.CloudEvent`. Only writes that go
+through the repository are recorded. See the
+[outbox docs](https://asynq-io.github.io/sqlargon/outbox/) for retention, retries and
+ordering.
+
 ## Column types and mixins
 
 `sqlargon.types` provides dialect-aware column types: `GUID` with `GenerateUUID` /
 `GenerateUUIDV7` server defaults, `Timestamp` with a `now()` server default and `JSON`
-(orjson-serialized). `sqlargon.types.pydantic` adds `Pydantic` and `ValidatedType` for
+(orjson-serialized), whose comparator carries portable JSON operators — containment and
+key tests, plus server-side mutation (`set_key`, `update`, `remove_key`) that rewrites a
+document in the `UPDATE` itself. `sqlargon.types.pydantic` adds `Pydantic` and `ValidatedType` for
 pydantic-validated columns. `sqlargon.mixins` bundles them into `UUIDModelMixin`,
 `UUIDV7ModelMixin`, `CreatedUpdatedMixin` and `SoftDeleteMixin`.
+
+## Auditable models
+
+`AuditableRepository` never updates a row: every write appends the next `version` of the
+same entity, so the table *is* the audit log. Reads are scoped to the newest live version,
+so the usual methods keep their usual meaning:
+
+```python
+from sqlargon import AuditableBase, AuditableRepository
+from sqlargon.mixins import UUIDModelMixin
+
+
+class Article(UUIDModelMixin, AuditableBase):
+    title: Mapped[str] = mapped_column(sa.Unicode(255))
+
+
+class ArticleRepository(AuditableRepository[Article]): ...
+
+
+articles = ArticleRepository()
+
+article = await articles.create(title="draft")  # version 1
+await articles.update_one({"title": "final"}, Article.id == article.id)  # version 2
+
+await articles.get(id=article.id)  # version 2
+await articles.history(id=article.id)  # versions 1 and 2
+await articles.get_version(1, id=article.id)  # version 1
+await articles.at(yesterday).list()  # the state as of yesterday
+
+await articles.remove(Article.id == article.id)  # appends a tombstoned version 3
+await articles.restore(Article.id == article.id)  # and a live version 4
+```
+
+The version joins the primary key, so concurrent appends collide there rather than one
+silently winning, and `update_if_match` gives the cheaper check first. Versions are either
+a human-readable counter (`AuditableBase`) or a sortable UUIDv7 (`UUIDAuditableBase`), and
+`sqlargon.audit` relates other tables to one exact version or to whichever is newest. See
+the [documentation](https://asynq-io.github.io/sqlargon/auditable/) for the full picture.
 
 ## FastAPI
 

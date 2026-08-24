@@ -21,9 +21,15 @@ sqlite = ["aiosqlite>=0.19.0,<1"]
 mysql = ["asyncmy>=0.2.11"]
 pagination = ["sqlakeyset>=2.0.1716332987,<3"]
 cron = ["croniter>=2.0,<7", "anyio>=4.0,<5"]
+outbox = ["anyio>=4.0,<5"]
+eventiq = ["eventiq>=1.1.14,<2"]
 opentelemetry = ["opentelemetry-instrumentation-sqlalchemy"]
 
 standard = ["asyncpg<1.0", "aiosqlite>=0.19.0,<1", "sqlakeyset>=2.0.1716332987,<3", "croniter>=2.0,<7", "anyio>=4.0,<5", "opentelemetry-instrumentation-sqlalchemy"]
+vectors = [
+    "pgvector>=0.5.0",
+]
+vectors-sqlite = ["sqliteai-vector>=1.0.0,<2"]
 
 [dependency-groups]
 dev = [
@@ -31,6 +37,7 @@ dev = [
     { include-group = "test" },
     { include-group = "e2e" },
     { include-group = "docs" },
+    "eventiq>=1.1.14",
     "fastapi>=0.138.0",
     "greenlet",
 ]
@@ -39,14 +46,17 @@ e2e = [
     "testcontainers>=4.15.0",
     # asyncmy needs it for the caching_sha2_password auth of MySQL 8
     "cryptography",
+    # the loadable extension the SQLite vector search runs on
+    "sqliteai-vector>=1.0.0,<2",
 ]
 
 test = [
+    "anyio>=4.14.1",
     "pytest",
     "pytest-cov",
     "pytest-sugar",
     "pytest-repeat",
-    "pytest-asyncio",
+    "pytest-xdist>=3.6",
     "httpx>=0.28.1",
     "pytest-timeout>=2.4.0",
 ]
@@ -76,9 +86,14 @@ build-backend = "uv_build"
 
 
 [tool.pytest.ini_options]
-addopts = "--cov=./sqlargon --count=3"
+# loadgroup keeps every test of an e2e backend on the worker that started its
+# container, so the backends run in parallel but each one boots only once
+addopts = "--cov=./sqlargon --count=3 --numprocesses=auto --dist=loadgroup"
 testpaths = ["./tests"]
-asyncio_mode = "auto"
+anyio_mode = "auto"
+# the anyio plugin only runs an async fixture for a test that pulls the backend
+# in, which a sync test requesting an autouse async fixture would not do
+usefixtures = ["anyio_backend"]
 timeout = 20
 markers = [
     "e2e: runs against a real database backend; enabled with --e2e",
@@ -144,6 +159,8 @@ classmethod-decorators = [
 [tool.ruff.lint.per-file-ignores]
 "sqlargon/*" = ["PLC0415"]
 "sqlargon/types/*" = ["ARG002"]
+# the search hooks name the arguments their dialect overrides act on
+"sqlargon/query_builder.py" = ["ARG002"]
 "tests/*" = ["S101", "ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "SLF001", "PLR2004", "ARG002"]
 # a fixture requested for its side effect only, and testcontainers imported
 # lazily so an ordinary run never pulls it in

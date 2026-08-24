@@ -46,6 +46,12 @@ def pytest_collection_modifyitems(
             item.add_marker(skip_e2e)
 
 
+@pytest.fixture(scope="session")
+def anyio_backend() -> str:
+    """Run the suite on asyncio only, the one loop SQLAlchemy supports."""
+    return "asyncio"
+
+
 @pytest.fixture(scope="session", autouse=True)
 def db():
     return Database.from_env()
