@@ -91,6 +91,23 @@ def _compile_postgresql(
     )
 
 
+@compiles(translated_value, "mysql")
+def _compile_mysql(
+    element: translated_value, compiler: SQLCompiler, **kwargs: Any
+) -> str:
+    """MySQL and MariaDB read a JSON scalar back quoted.
+
+    ``JSON_EXTRACT`` yields ``"text"`` rather than ``text``, which ``LIKE`` and
+    ordering then match against including the quotes -- an equality comparison
+    coerces its operand to JSON and happens to agree, which is what makes the
+    rest of the surface look correct. Unquoting brings all of them back in line.
+    """
+    return compiler.process(
+        sa.func.json_unquote(sa.func.json_extract(_operand(element), _locale_path())),
+        **kwargs,
+    )
+
+
 @compiles(translated_value)
 def _compile_default(
     element: translated_value, compiler: SQLCompiler, **kwargs: Any
