@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, cast
 from weakref import WeakKeyDictionary
 
 import sqlalchemy as sa
@@ -13,6 +13,8 @@ from sqlalchemy.orm import (
     relationship,
 )
 from sqlalchemy.orm.collections import attribute_keyed_dict
+
+from sqlargon.orm import Base
 
 from .expression import current_locale
 from .mixin import TranslationMixin
@@ -223,6 +225,23 @@ class TranslatableMixin(TranslationMixin):
         """Drop ``field`` from every locale row, leaving the other fields."""
         for row in self._translations.values():
             setattr(row, field, None)
+
+
+class TranslatableBase(TranslatableMixin, Base):
+    """Declarative base for models whose fields live in a translation table.
+
+    Inherit it instead of combining :class:`TranslatableMixin` with
+    :class:`~sqlargon.orm.Base` by hand, so
+    :class:`~sqlargon.i18n.TranslatedRepository` can type its model::
+
+        class Article(UUIDModelMixin, TranslatableBase):
+            __translated_fields__ = ("title",)
+    """
+
+    __abstract__ = True
+
+
+TranslatableModel = TypeVar("TranslatableModel", bound=TranslatableBase)
 
 
 def _translated_property(field: str) -> hybrid_property[Translation | None]:

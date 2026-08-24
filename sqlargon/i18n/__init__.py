@@ -2,7 +2,9 @@ from .expression import current_locale, get_locale, set_locale_getter, translate
 from .mixin import TranslationMixin
 from .repository import TranslatedRepository
 from .translatable import (
+    TranslatableBase,
     TranslatableMixin,
+    TranslatableModel,
     TranslationBase,
     current_translation,
     translation_class,
@@ -20,7 +22,9 @@ from .translation import (
 
 __all__ = [
     "LocaleMap",
+    "TranslatableBase",
     "TranslatableMixin",
+    "TranslatableModel",
     "TranslatedRepository",
     "TranslatedString",
     "Translation",
