@@ -14,7 +14,7 @@ from sqlargon.query_builder import UnsupportedDialectError
 
 try:
     from pgvector.sqlalchemy import VECTOR
-except ImportError as e:
+except ImportError as e:  # pragma: no cover - the extra is installed here
     msg = "Vector columns require the 'pgvector' package; install 'sqlargon[vectors]'"
     raise ImportError(msg) from e
 

@@ -17,6 +17,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from sqlargon import Base, Database
+from sqlargon.i18n import expression, translation
 from sqlargon.vectors import init_vectors
 
 from .backends import Backend, parse_backends
@@ -30,6 +31,8 @@ from .models import (
     AuditCommentRepository,
     AuditFollowRepository,
     DocumentRepository,
+    I18nArticleRepository,
+    I18nPostRepository,
     OutboxUserRepository,
     RawAuditArticleRepository,
     SoftUserRepository,
@@ -42,7 +45,7 @@ from .models import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator
+    from collections.abc import AsyncGenerator, Callable, Generator
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
@@ -141,6 +144,47 @@ async def db(
                     await connection.execute(table.delete())
         finally:
             await database.dispose()
+
+
+#: The chain each locale walks; a locale absent from it falls back to itself.
+LOCALE_CHAINS = {"en": ("en",), "pl": ("pl", "en"), "de": ("de", "en")}
+
+
+@pytest.fixture
+def locales() -> Generator[Callable[[str], None]]:
+    """Install a locale getter and fallback chain, and hand back the setter.
+
+    Both are process-global slots, so whatever was in them is put back --
+    xdist keeps a backend's whole test set on one worker, and a leaked getter
+    would follow the suite into the next test.
+    """
+    active = "en"
+
+    def switch(value: str) -> None:
+        nonlocal active
+        active = value
+
+    previous_locale = expression._get_locale
+    previous_fallback = translation._get_fallback
+    expression.set_locale_getter(lambda: active)
+    translation.set_fallback_chain(
+        lambda requested: LOCALE_CHAINS.get(requested or active, (requested or active,))
+    )
+    try:
+        yield switch
+    finally:
+        expression._get_locale = previous_locale
+        translation._get_fallback = previous_fallback
+
+
+@pytest.fixture
+def i18n_posts() -> I18nPostRepository:
+    return I18nPostRepository()
+
+
+@pytest.fixture
+def i18n_articles() -> I18nArticleRepository:
+    return I18nArticleRepository()
 
 
 @pytest.fixture

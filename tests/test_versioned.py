@@ -4,10 +4,12 @@ Mirrors ``test_soft_delete.py``: in-memory SQLite via the shared ``db``
 fixture, module-level models to survive ``--count=3`` re-registration.
 """
 
+from typing import Any
 from uuid import UUID
 
 import pytest
 import sqlalchemy as sa
+from sqlalchemy.orm import declared_attr
 
 from sqlargon import (
     Base,
@@ -18,6 +20,7 @@ from sqlargon import (
     VersionedBase,
     VersionedMixin,
     VersionedRepository,
+    XminVersionedBase,
 )
 from sqlargon.mixins import UUIDModelMixin
 from sqlargon.types import GUID, GenerateUUID
@@ -50,6 +53,29 @@ class MarkerOnly(VersionedMixin, Base):
     id = sa.Column(sa.Integer, primary_key=True)
 
 
+class CounterVersioned(VersionedMixin, Base):
+    """An integer version column, the counter SQLAlchemy versions by default."""
+
+    __tablename__ = "test_versioned_counter"
+
+    id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
+    name = sa.Column(sa.Unicode(255), nullable=True)
+    version_id = sa.Column(sa.Integer, nullable=False, default=1)
+
+    @declared_attr.directive
+    def __mapper_args__(cls) -> dict[str, Any]:
+        return {"eager_defaults": True, "version_id_col": cls.version_id}
+
+
+class ServerVersioned(XminVersionedBase):
+    """A server managed version, which the repository must never set itself."""
+
+    __tablename__ = "test_versioned_server"
+
+    id = sa.Column(sa.Integer, primary_key=True)
+    name = sa.Column(sa.Unicode(255), nullable=True)
+
+
 class VersionedArticleRepository(VersionedRepository[VersionedArticle]):
     default_order_by = VersionedArticle.id
 
@@ -64,16 +90,32 @@ class HandVersionedRepository(VersionedRepository[HandVersioned]):  # type: igno
     pass
 
 
+class CounterRepository(VersionedRepository[CounterVersioned]):  # type: ignore[type-var]
+    default_order_by = CounterVersioned.id
+
+
+class ServerVersionedRepository(VersionedRepository[ServerVersioned]):
+    pass
+
+
 # --- fixtures ---
 
 
 @pytest.fixture(autouse=True)
 async def tables(db: Database):
+    created = (VersionedArticle.__table__, CounterVersioned.__table__)
     async with db.engine.begin() as conn:
-        await conn.run_sync(VersionedArticle.__table__.create, checkfirst=True)
+        for table in created:
+            await conn.run_sync(table.create, checkfirst=True)
     yield
     async with db.engine.begin() as conn:
-        await conn.run_sync(VersionedArticle.__table__.drop, checkfirst=True)
+        for table in reversed(created):
+            await conn.run_sync(table.drop, checkfirst=True)
+
+
+@pytest.fixture
+def counters():
+    return CounterRepository()
 
 
 @pytest.fixture
@@ -384,3 +426,113 @@ async def test_update_one_with_manual_version_filter_works_on_match(
 
     assert updated is not None
     assert updated.name == "jane"
+
+
+# --- integer counter versions ---
+
+
+def test_counter_version_is_recognised():
+    assert CounterRepository._is_counter()
+    assert not VersionedArticleRepository._is_counter()
+
+
+def test_counter_update_bumps_with_a_sql_expression(counters):
+    """A counter has no fresh value to bind: it is bumped relative to the row."""
+    query = counters.update({"name": "jane"}).query
+
+    assert "version_id + " in str(query.compile(compile_kwargs={"literal_binds": True}))
+
+
+async def test_counter_version_starts_at_one(counters):
+    row = await counters.create(name="john")
+
+    assert row.version_id == 1
+
+
+async def test_counter_version_increments_on_every_update(counters):
+    row = await counters.create(name="john")
+
+    for expected in (2, 3, 4):
+        row = await counters.update_one({"name": "jane"}, CounterVersioned.id == row.id)
+        assert row.version_id == expected
+
+
+async def test_counter_update_if_match_rejects_a_stale_version(counters):
+    row = await counters.create(name="john")
+    await counters.update_one({"name": "jane"}, CounterVersioned.id == row.id)
+
+    stale = await counters.update_if_match(
+        {"name": "joan"}, CounterVersioned.id == row.id, expected_version=1
+    )
+
+    assert stale is None
+
+
+async def test_counter_update_if_match_accepts_the_current_version(counters):
+    row = await counters.create(name="john")
+
+    updated = await counters.update_if_match(
+        {"name": "jane"},
+        CounterVersioned.id == row.id,
+        expected_version=row.version_id,
+    )
+
+    assert updated is not None
+    assert updated.version_id == 2
+
+
+async def test_counter_bulk_update_leaves_the_version_alone(counters):
+    """An executemany binds one set of parameters per row, which a SQL
+    expression -- the same for every row -- is not.
+    """
+    first = await counters.create(name="a")
+    second = await counters.create(name="b")
+
+    await counters.bulk_update(
+        [{"id": first.id, "name": "a2"}, {"id": second.id, "name": "b2"}]
+    )
+
+    rows = await counters.select().order_by(CounterVersioned.id).all()
+    assert [row.name for row in rows] == ["a2", "b2"]
+    assert [row.version_id for row in rows] == [1, 1]
+
+
+# --- server managed versions ---
+
+
+def test_server_managed_version_is_never_set():
+    query = ServerVersionedRepository().update({"name": "jane"}).query
+
+    assert "xmin" not in str(query.compile(compile_kwargs={"literal_binds": True}))
+
+
+def test_server_managed_version_is_recognised():
+    assert ServerVersionedRepository._is_server_versioned()
+    assert not VersionedArticleRepository._is_server_versioned()
+
+
+# --- multi row updates ---
+
+
+def test_update_of_multiple_rows_versions_each_of_them(repository):
+    versioned = repository._with_version_increment(
+        [{"id": 1, "name": "a"}, {"id": 2, "name": "b"}]
+    )
+
+    versions = [row["version_id"] for row in versioned]
+    assert all(isinstance(version, UUID) for version in versions)
+    assert versions[0] != versions[1]
+
+
+def test_counter_update_of_multiple_rows_leaves_the_version_alone(counters):
+    values = [{"id": 1, "name": "a"}, {"id": 2, "name": "b"}]
+
+    assert counters._with_version_increment(values) == values
+
+
+def test_server_managed_guard_compares_the_column_as_text():
+    """``xid = varchar`` is not an operator PostgreSQL has."""
+    guard = ServerVersionedRepository()._version_filter(999)
+
+    sql = str(guard.compile(compile_kwargs={"literal_binds": True}))
+    assert sql == "CAST(test_versioned_server.xmin AS TEXT) = '999'"

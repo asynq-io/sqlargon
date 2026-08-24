@@ -19,7 +19,7 @@ from .routing import RoutingContext
 
 try:
     from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-except ImportError:
+except ImportError:  # pragma: no cover - the extra is installed here
     SQLAlchemyInstrumentor = None
 
 if TYPE_CHECKING:

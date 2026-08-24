@@ -257,6 +257,23 @@ def test_json_dialect_impl_fallback(dialect):
     assert impl.none_as_null is True
 
 
+# --- JSON literal rendering ---
+
+
+@pytest.mark.parametrize(
+    "dialect", [postgresql.dialect(), sqlite.dialect(), mysql.dialect()]
+)
+def test_json_literal_processor_renders_null(dialect):
+    assert JSON().literal_processor(dialect)(None) == "NULL"
+
+
+@pytest.mark.parametrize(
+    "dialect", [postgresql.dialect(), sqlite.dialect(), mysql.dialect()]
+)
+def test_json_literal_processor_serializes_and_quotes_a_document(dialect):
+    assert JSON().literal_processor(dialect)({"a": 1}) == "'{\"a\":1}'"
+
+
 # --- JSON per-dialect compilation ---
 
 _json_col = sa.column("data", JSON())

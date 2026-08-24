@@ -28,6 +28,14 @@ from sqlargon import (
     version_foreign_key,
     version_mapped_column,
 )
+from sqlargon.i18n import (
+    TranslatableBase,
+    TranslatedRepository,
+    TranslatedString,
+    Translation,
+    TranslationMixin,
+    translation_table,
+)
 from sqlargon.mixins import CreatedUpdatedMixin, UUIDModelMixin
 from sqlargon.outbox import OutboxConfig, OutboxEvent, OutboxRepository
 from sqlargon.types import GUID, JSON, GenerateUUID, GenerateUUIDV7, Timestamp, now
@@ -288,6 +296,40 @@ class VectorDocRepository(HybridVectorRepository[VectorDoc]):
     default_order_by = VectorDoc.created_at
 
 
+class I18nPost(UUIDModelMixin, TranslationMixin, Base):
+    """The JSON column backend: every locale lives in one column."""
+
+    __tablename__ = "e2e_i18n_post"
+
+    title: Mapped[Translation] = mapped_column(TranslatedString(), nullable=True)
+
+
+class I18nArticle(UUIDModelMixin, TranslatableBase):
+    """The translation table backend, with a plain column alongside."""
+
+    __tablename__ = "e2e_i18n_article"
+    __translated_fields__ = ("title", "body")
+
+    slug: Mapped[str | None] = mapped_column(sa.Unicode(64), nullable=True)
+
+
+class I18nArticleTranslation(translation_table(I18nArticle)):  # type: ignore[misc]
+    __tablename__ = "e2e_i18n_article_translation"
+
+    # declared NOT NULL on purpose: a locale row carries only the fields
+    # translated to that locale, so `translation_table` overrides it
+    title: Mapped[str] = mapped_column(sa.Unicode(64), nullable=False)
+    body: Mapped[str] = mapped_column(sa.UnicodeText(), nullable=False)
+
+
+class I18nPostRepository(SQLAlchemyRepository[I18nPost]):
+    default_order_by = I18nPost.id
+
+
+class I18nArticleRepository(TranslatedRepository[I18nArticle]):
+    default_order_by = I18nArticle.id
+
+
 def _tables(*models: type[Base]) -> tuple[sa.Table, ...]:
     return tuple(Base.metadata.tables[model.__tablename__] for model in models)
 
@@ -307,6 +349,9 @@ TABLES: tuple[sa.Table, ...] = _tables(
     AuditComment,
     AuditFollow,
     AuditArticle,
+    I18nPost,
+    I18nArticleTranslation,
+    I18nArticle,
 )
 
 #: Tables the vector suite needs, which only a backend that can search vectors

@@ -9,7 +9,7 @@ from .models import CursorPage
 try:
     from sqlakeyset import unserialize_bookmark
     from sqlakeyset.paging import core_page_from_rows, prepare_paging
-except ImportError as e:
+except ImportError as e:  # pragma: no cover - the extra is installed here
     msg = (
         "Cursor pagination requires the 'sqlakeyset' package; "
         "install 'sqlargon[pagination]'"

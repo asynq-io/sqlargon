@@ -170,6 +170,15 @@ def test_vector_normalises_non_list_results():
     )
 
 
+def test_vector_normalises_a_non_list_bind():
+    assert Vector(3).process_bind_param((1, 2, 3), postgresql.dialect()) == VECTOR
+
+
+def test_vector_postgresql_result_passes_the_list_through():
+    stored = [1.0, 2.0, 3.0]
+    assert Vector(3).process_result_value(stored, postgresql.dialect()) is stored
+
+
 @pytest.mark.parametrize("dialect", [postgresql.dialect(), sqlite.dialect()])
 def test_vector_none_stays_none(dialect):
     vector = Vector(3)
@@ -212,6 +221,20 @@ def test_comparator_exposes_the_distance_methods():
         Note.embedding.max_inner_product(VECTOR), postgresql.dialect()
     )
     assert "<+>" in _compile(Note.embedding.l1_distance(VECTOR), postgresql.dialect())
+
+
+@pytest.mark.parametrize(
+    ("metric", "operator"),
+    [
+        (DistanceMetric.COSINE, "<=>"),
+        (DistanceMetric.L2, "<->"),
+        (DistanceMetric.DOT, "<#>"),
+        (DistanceMetric.L1, "<+>"),
+    ],
+)
+def test_comparator_distance_selects_the_metric(metric, operator):
+    expression = Note.embedding.distance(VECTOR, metric)
+    assert operator in _compile(expression, postgresql.dialect())
 
 
 def test_metric_maps_to_pgvector_names():
