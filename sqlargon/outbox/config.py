@@ -5,7 +5,13 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any
 
-__all__ = ["ALL_OPERATIONS", "AttributeSource", "Operation", "OutboxConfig"]
+__all__ = [
+    "ALL_OPERATIONS",
+    "AttributeSource",
+    "Operation",
+    "OutboxConfig",
+    "format_topic",
+]
 
 # Where an extra CloudEvent attribute comes from: a name of an attribute of
 # the written row, or a callable handed that row -- how a ContextVar is read
@@ -38,32 +44,14 @@ class Operation(str, Enum):
 ALL_OPERATIONS = frozenset(Operation)
 
 
+def format_topic(topic: str, row: Any) -> str:
+    if "{" not in topic:
+        return topic
+    return topic.format(**vars(row))
+
+
 @dataclass(frozen=True, slots=True)
 class OutboxConfig:
-    """How the writes of one repository are turned into events.
-
-    ``topic`` and ``type_prefix`` both default to the model's table name,
-    giving events of type ``user.created`` on the ``user`` topic. ``exclude``
-    keeps columns out of the payload -- a password hash has no business
-    leaving the database -- while ``include`` states the payload columns
-    outright and wins over ``exclude``.
-
-    ``attributes`` names the values that ride next to ``type`` and ``source``
-    rather than inside the payload, for a schema whose CloudEvent carries a
-    tenant or a trace of its own::
-
-        OutboxConfig(
-            exclude={"tenant_id"},
-            attributes={
-                "tenant_id": "tenant_id",
-                "traceparent": lambda _: trace_id.get(),
-            },
-        )
-
-    They are read when the write happens, since the relay publishes long
-    after the context the write ran in is gone.
-    """
-
     topic: str | None = None
     type_prefix: str | None = None
     source: str | None = None

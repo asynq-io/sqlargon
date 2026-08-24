@@ -13,7 +13,6 @@
 *SQLAlchemy repository pattern and utilities*
 
 ---
-Version: 1.0.0b1
 
 Docs: [https://asynq-io.github.io/sqlargon/](https://asynq-io.github.io/sqlargon/)
 
@@ -21,23 +20,43 @@ Repository: [https://github.com/asynq-io/sqlargon](https://github.com/asynq-io/s
 
 ---
 
-## About
+## Features
 
-SQLArgon provides glue code to use SQLAlchemy async sessions, core queries and ORM models
-from one object which provides somewhat of a repository pattern. This solution has a few
-advantages:
+- **Repository pattern** — one object wraps async sessions, core queries and ORM models;
+  sessions are context-local and resolved at call time, so nothing gets passed around
+- **High-level CRUD** — `create`, `get`, `get_or_create`, `create_or_update`, `all`,
+  `list`, `count`, `update_one`, `update_many`, `delete_one`, `delete_many` and `remove`
+  out of the box
+- **Bulk operations** — `bulk_create`, `bulk_create_or_update` and `bulk_update` with
+  per-repository conflict handling
+- **Query builder** — fluent, dialect-aware statements for upserts, `RETURNING`, advisory
+  locks and streaming, with terminal helpers that cast results to `.scalars()`, `.one()`,
+  `.mappings()`, ...
+- **Multi-dialect** — PostgreSQL, SQLite, MySQL and MariaDB, with capability-gated SQL
+  generation per backend
+- **Transactions** — `@atomic` and database-scoped `atomic()` blocks, plus named advisory
+  locks
+- **Unit of work** — repositories declared as annotations on a unit of work share one
+  session and one transaction
+- **Database routing** — [clusters](routing.md) with read replicas, shards and vertical
+  partitioning; `using()`, `read_only` and per-request `use_context`
+- **Pagination** — [page-number, offset/limit and keyset cursor](pagination.md) strategies
+- **Outbox** — [transactional outbox](outbox.md) with a background relay and eventiq
+  integration
+- **Cron** — [database-backed scheduler](cron.md) with namespaces and safe multi-instance
+  claiming
+- **Column types and mixins** — UUID (v4/v7), timestamp, orjson JSON and pydantic-validated
+  columns; mixins for UUID keys, created/updated timestamps and soft delete
+- **Soft delete** — tombstone-based deletes via `SoftDeleteRepository`
+- **Versioned models** — optimistic concurrency with UUID or PostgreSQL `xmin` versions
+- **Auditable models** — [append-only versioned history](auditable.md) with point-in-time
+  reads and restore
+- **Vector search** — [embeddings with similarity, full-text and hybrid
+  reciprocal-rank-fusion search](vectors.md) on PostgreSQL and SQLite
+- **FastAPI-ready** — repositories and units of work work directly as dependencies
+- **Alembic migrations** — async-first [migration setup](migrations.md)
+- **OpenTelemetry** — optional SQLAlchemy instrumentation
 
-- no need to pass a `session` object to every function/method — sessions are context-local
-  and resolved by the repository itself
-- write data access queries in one place
-- no need to import `insert`, `update`, `delete`, `select` from SQLAlchemy over and over again
-- implicit cast of results to `.scalars().all()`, `.one()`, `.mappings()`, ...
-- a dialect-aware query builder for upserts, `RETURNING` and advisory locks
-- your view model (e.g. FastAPI routes) does not need to know about the underlying storage —
-  the repository class can be replaced at any moment with any object providing a similar
-  interface
-- engines and routing policy are separate, so the same repository runs against one database,
-  a primary with read replicas, or a set of shards
 
 ## Installation
 
@@ -113,6 +132,10 @@ or from `DATABASE_*` environment variables.
 - **[Usage](usage.md)** — models, CRUD, query building, transactions and units of work.
 - **[Database Routing](routing.md)** — replicas, shards, routers and FastAPI wiring.
 - **[Pagination](pagination.md)** — page-number, offset/limit and cursor strategies.
+- **[Cron](cron.md)** — database-backed scheduling with namespaces and multi-instance safety.
+- **[Outbox](outbox.md)** — the transactional outbox pattern and its relay.
+- **[Vector Search](vectors.md)** — embeddings, similarity and hybrid search.
+- **[Auditable Models](auditable.md)** — append-only versioned history.
 - **[Examples](examples.md)** — end-to-end recipes: a FastAPI service, batch workers,
   multi-tenant sharding, testing.
 - **Reference** — [types and mixins](reference/types.md), [dialects](reference/dialects.md),

@@ -126,6 +126,8 @@ Generated from the source. See [Usage](../usage.md) for a narrative introduction
 
 ::: sqlargon.outbox.Operation
 
+::: sqlargon.outbox.format_topic
+
 ::: sqlargon.integrations.eventiq.to_cloud_event
 
 ::: sqlargon.integrations.eventiq.eventiq_publisher

@@ -26,6 +26,10 @@ eventiq = ["eventiq>=1.1.14,<2"]
 opentelemetry = ["opentelemetry-instrumentation-sqlalchemy"]
 
 standard = ["asyncpg<1.0", "aiosqlite>=0.19.0,<1", "sqlakeyset>=2.0.1716332987,<3", "croniter>=2.0,<7", "anyio>=4.0,<5", "opentelemetry-instrumentation-sqlalchemy"]
+vectors = [
+    "pgvector>=0.5.0",
+]
+vectors-sqlite = ["sqliteai-vector>=1.0.0,<2"]
 
 [dependency-groups]
 dev = [
@@ -42,6 +46,8 @@ e2e = [
     "testcontainers>=4.15.0",
     # asyncmy needs it for the caching_sha2_password auth of MySQL 8
     "cryptography",
+    # the loadable extension the SQLite vector search runs on
+    "sqliteai-vector>=1.0.0,<2",
 ]
 
 test = [
@@ -153,6 +159,8 @@ classmethod-decorators = [
 [tool.ruff.lint.per-file-ignores]
 "sqlargon/*" = ["PLC0415"]
 "sqlargon/types/*" = ["ARG002"]
+# the search hooks name the arguments their dialect overrides act on
+"sqlargon/query_builder.py" = ["ARG002"]
 "tests/*" = ["S101", "ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "SLF001", "PLR2004", "ARG002"]
 # a fixture requested for its side effect only, and testcontainers imported
 # lazily so an ordinary run never pulls it in
