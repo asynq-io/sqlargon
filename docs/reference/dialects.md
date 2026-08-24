@@ -11,12 +11,12 @@ is isolated.
 Builders declare what they support as an `Option` flag, checked with
 `db.query_builder.supports(...)`:
 
-| Dialect | `RETURNING` | `CONFLICTS` | `LOCKS` |
-| --- | --- | --- | --- |
-| `postgresql` | ✅ | ✅ | ✅ `pg_advisory_lock` |
-| `sqlite` | ✅ (SQLite ≥ 3.35) | ✅ | ❌ |
-| `mysql` | ❌ | ✅ | ✅ `GET_LOCK` |
-| anything else | ❌ | ❌ | ❌ |
+| Dialect | `RETURNING` | `CONFLICTS` | `LOCKS` | `VECTORS` | `FULL_TEXT` |
+| --- | --- | --- | --- | --- | --- |
+| `postgresql` | ✅ | ✅ | ✅ `pg_advisory_lock` | ✅ pgvector | ✅ `ts_rank` |
+| `sqlite` | ✅ (SQLite ≥ 3.35) | ✅ | ❌ | ✅ sqlite-vector | ❌ |
+| `mysql` | ❌ | ✅ | ✅ `GET_LOCK` | ❌ | ❌ |
+| anything else | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 ```python
 from sqlargon.query_builder import Option
@@ -105,6 +105,13 @@ page_stmt, total_stmt = qb.page(qb.select(User), offset=0, limit=50, include_tot
 Methods: `select`, `insert`, `update`, `delete`, `filter`, `count`, `page`, `lock`, `unlock`
 and `get_lock_pair`. `insert`, `update` and `delete` take `return_results=True` to append a
 `RETURNING` clause for the whole table.
+
+The search hooks — `vector_search`, `vector_distance`, `vector_init`, `text_search` and
+`rrf_search` — are the same idea for [vector search](../vectors.md): the base class refuses
+them with `UnsupportedDialectError`, and the two backends that can search express it in
+shapes with nothing in common. PostgreSQL orders by a pgvector operator; SQLite joins the
+table valued scan sqlite-vector exposes, because it has no scalar distance function at all.
+Keeping both behind one hook is what lets `VectorRepository.search()` be portable.
 
 ## Adding a dialect
 

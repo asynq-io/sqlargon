@@ -11,22 +11,35 @@ from uuid import UUID
 
 import sqlalchemy as sa
 from pydantic import BaseModel
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 
 from sqlargon import (
+    AuditableBase,
+    AuditableRepository,
     Base,
     SoftDeleteBase,
     SoftDeleteRepository,
     SQLAlchemyRepository,
+    UUIDAuditableBase,
     VersionedBase,
     VersionedRepository,
     XminVersionedBase,
+    latest_relationship,
+    version_foreign_key,
+    version_mapped_column,
 )
 from sqlargon.mixins import CreatedUpdatedMixin, UUIDModelMixin
 from sqlargon.outbox import OutboxConfig, OutboxEvent, OutboxRepository
 from sqlargon.types import GUID, JSON, GenerateUUID, GenerateUUIDV7, Timestamp, now
 from sqlargon.types.pydantic import Pydantic
 from sqlargon.typing import OnConflictOptions
+from sqlargon.vectors import (
+    EmbeddingBase,
+    HybridVectorRepository,
+    VectorCollection,
+    VectorDocument,
+    VectorRepository,
+)
 
 
 class Address(BaseModel):
@@ -135,8 +148,73 @@ class VersionedUserRepository(VersionedRepository[VersionedUser]):
     default_order_by = VersionedUser.name
 
 
-class XminUserRepository(VersionedRepository[XminUser]):  # type: ignore[type-var]
+class XminUserRepository(VersionedRepository[XminUser]):
     default_order_by = XminUser.name
+
+
+class AuditArticle(UUIDModelMixin, AuditableBase):
+    """Append-only, versioned by a counter."""
+
+    __tablename__ = "e2e_audit_article"
+
+    name: Mapped[str] = mapped_column(sa.Unicode(64))
+    tag: Mapped[str | None] = mapped_column(sa.Unicode(64), nullable=True)
+
+
+class UUIDAuditArticle(UUIDModelMixin, UUIDAuditableBase):
+    """The same shape, versioned by UUIDv7."""
+
+    __tablename__ = "e2e_uuid_audit_article"
+
+    name: Mapped[str] = mapped_column(sa.Unicode(64))
+
+
+class AuditComment(UUIDModelMixin, Base):
+    """A child pinned to one exact version of an article."""
+
+    __tablename__ = "e2e_audit_comment"
+
+    article_id: Mapped[UUID] = mapped_column(GUID())
+    article_version = version_mapped_column(AuditArticle)
+    body: Mapped[str] = mapped_column(sa.Unicode(64))
+
+    __table_args__ = (
+        version_foreign_key(AuditArticle, "article_id", "article_version"),
+    )
+
+    article: Mapped[AuditArticle] = relationship()
+
+
+class AuditFollow(UUIDModelMixin, Base):
+    """A child following whichever version of an article is newest."""
+
+    __tablename__ = "e2e_audit_follow"
+
+    article_id: Mapped[UUID] = mapped_column(GUID())
+
+    article: Mapped[AuditArticle] = latest_relationship(AuditArticle, "article_id")
+
+
+class AuditArticleRepository(AuditableRepository[AuditArticle]):
+    pass
+
+
+class RawAuditArticleRepository(SQLAlchemyRepository[AuditArticle]):
+    """Unscoped view of the same table, to observe what is physically stored."""
+
+    default_order_by = AuditArticle.version
+
+
+class UUIDAuditArticleRepository(AuditableRepository[UUIDAuditArticle]):
+    pass
+
+
+class AuditCommentRepository(SQLAlchemyRepository[AuditComment]):
+    pass
+
+
+class AuditFollowRepository(SQLAlchemyRepository[AuditFollow]):
+    pass
 
 
 class OutboxUser(UUIDModelMixin, CreatedUpdatedMixin, Base):
@@ -159,13 +237,62 @@ class OutboxUserRepository(OutboxRepository[OutboxUser]):
     )
 
 
+class VectorNote(UUIDModelMixin, EmbeddingBase):
+    """An embedding and nothing else, to prove the mixins are optional."""
+
+    __tablename__ = "e2e_vector_note"
+    __vector_dim__ = 3
+
+    @declared_attr.directive
+    def __table_args__(cls) -> tuple[sa.Index, ...]:
+        return (cls.embedding_index(),)
+
+    name: Mapped[str] = mapped_column(sa.Unicode(64))
+
+
+class VectorDoc(VectorDocument):
+    """Every column the extension offers, indexes included."""
+
+    __tablename__ = "e2e_vector_doc"
+    __vector_dim__ = 3
+    __text_regconfig__ = "english"
+
+    @declared_attr.directive
+    def __table_args__(cls) -> tuple[sa.Index, ...]:
+        return (cls.embedding_index(), cls.attributes_index(), cls.text_index())
+
+
+class VectorNoteRepository(VectorRepository[VectorNote]):
+    default_order_by = VectorNote.name
+
+
+class VectorDocRepository(HybridVectorRepository[VectorDoc]):
+    default_order_by = VectorDoc.created_at
+
+
 def _tables(*models: type[Base]) -> tuple[sa.Table, ...]:
     return tuple(Base.metadata.tables[model.__tablename__] for model in models)
 
 
 #: Tables every backend can hold; the only ones the e2e suite creates.
+#:
+#: A child referencing an audited version comes before the table it points at,
+#: so the per test cleanup can empty them in this order without tripping the
+#: foreign key.
 TABLES: tuple[sa.Table, ...] = _tables(
-    User, Document, SoftUser, VersionedUser, OutboxUser, OutboxEvent
+    User,
+    Document,
+    SoftUser,
+    VersionedUser,
+    OutboxUser,
+    OutboxEvent,
+    AuditComment,
+    AuditFollow,
+    AuditArticle,
+    UUIDAuditArticle,
+    VectorNote,
+    VectorDoc,
+    VectorCollection,
 )
 
 #: Tables whose DDL carries a server side UUID default, which not every

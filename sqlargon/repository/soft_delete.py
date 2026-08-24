@@ -63,12 +63,25 @@ class SoftDeleteRepository(SQLAlchemyRepository[SoftDeleteModel], abstract=True)
 
     def __init_subclass__(cls, *, abstract: bool = False, **kwargs: Any) -> None:
         super().__init_subclass__(abstract=abstract, **kwargs)
-        if not abstract and not issubclass(cls.model, SoftDeleteMixin):
+        if abstract:
+            return
+        mixin, name = cls._required_mixin()
+        if not issubclass(cls.model, mixin):
             msg = (
-                f"{cls.model.__name__} must inherit from SoftDeleteMixin "
+                f"{cls.model.__name__} must inherit from {name} "
                 f"to be used with {cls.__name__}"
             )
             raise TypeError(msg)
+
+    @classmethod
+    def _required_mixin(cls) -> tuple[type, str]:
+        """The mixin a model must carry, and how to name it when it does not.
+
+        A subclass narrowing the requirement -- as
+        :class:`~sqlargon.repository.AuditableRepository` does -- overrides
+        this so the error names the mixin its own models need.
+        """
+        return SoftDeleteMixin, "SoftDeleteMixin"
 
     @classmethod
     def _get_default_set(cls) -> set[str]:

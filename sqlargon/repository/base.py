@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any, ClassVar, Generic, Literal, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, Literal, cast, overload
 
 from sqlalchemy import (
     Delete,
@@ -16,6 +16,7 @@ from sqlalchemy import (
     false,
     or_,
 )
+from sqlalchemy.engine.result import IteratorResult, SimpleResultMetaData
 from sqlalchemy.orm import QueryableAttribute, selectinload
 
 from sqlargon.mixins import CreatedUpdatedMixin
@@ -56,6 +57,21 @@ if TYPE_CHECKING:
     from sqlargon.query_builder import QueryBuilder
 
 __all__ = ["SQLAlchemyRepository"]
+
+
+def _as_result(rows: Sequence[object]) -> IteratorResult[Any]:
+    """Re-wrap already fetched rows as a single-column result.
+
+    A hook that has to consume the result of the write it wraps -- to capture
+    the written rows, or because it built them itself -- hands them back in a
+    fresh result rather than the exhausted one.
+    """
+    metadata = SimpleResultMetaData(("value",))
+    return IteratorResult(metadata, iter([(row,) for row in rows]))
+
+
+def _as_scalars(rows: Sequence[Model]) -> ScalarResult[Model]:
+    return cast("ScalarResult[Model]", _as_result(rows).scalars())
 
 
 class SQLAlchemyRepository(Generic[Model]):

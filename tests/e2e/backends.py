@@ -18,8 +18,10 @@ if TYPE_CHECKING:
     from contextlib import AbstractContextManager
     from pathlib import Path
 
-# ``uuidv7()`` is a PostgreSQL 18 builtin, so GenerateUUIDV7 needs at least it
-POSTGRES_IMAGE = os.environ.get("SQLARGON_E2E_POSTGRES_IMAGE", "postgres:18-alpine")
+# ``uuidv7()`` is a PostgreSQL 18 builtin, so GenerateUUIDV7 needs at least it.
+# The pgvector image is that PostgreSQL plus the extension the vector suite
+# needs, so it stands in for the plain one rather than adding a backend.
+POSTGRES_IMAGE = os.environ.get("SQLARGON_E2E_POSTGRES_IMAGE", "pgvector/pgvector:pg18")
 MYSQL_IMAGE = os.environ.get("SQLARGON_E2E_MYSQL_IMAGE", "mysql:8.4")
 # RANDOM_BYTES, which the UUID server defaults use, needs MariaDB 10.10
 MARIADB_IMAGE = os.environ.get("SQLARGON_E2E_MARIADB_IMAGE", "mariadb:11.4")
@@ -99,6 +101,9 @@ class Backend:
     #: an upsert may leave a column of the conflict set out of its values
     partial_upsert: bool = True
     is_mariadb: bool = False
+    #: the server can search vectors -- pgvector, or the sqlite-vector
+    #: loadable extension
+    vector_search: bool = False
 
     @property
     def is_mysql_family(self) -> bool:
@@ -119,6 +124,7 @@ BACKENDS: dict[str, Backend] = {
         skip_locked=False,
         # the SQLite key operators match JSON values, not object keys
         json_key_operators=False,
+        vector_search=True,
     ),
     "postgres": Backend(
         name="postgres",
@@ -132,6 +138,7 @@ BACKENDS: dict[str, Backend] = {
         server_side_uuid=True,
         skip_locked=True,
         json_key_operators=True,
+        vector_search=True,
     ),
     "mysql": Backend(
         name="mysql",
