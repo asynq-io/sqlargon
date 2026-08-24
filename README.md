@@ -51,6 +51,8 @@ Repository: https://github.com/asynq-io/sqlargon
 - **Auditable models** — append-only versioned history with point-in-time reads and restore
 - **Vector search** — embeddings with cosine, L2, dot and L1 similarity, full-text and
   hybrid reciprocal-rank-fusion search on PostgreSQL and SQLite
+- **Internationalization** — multi-locale text in a JSON column or a translation table,
+  with per-request locales and fallback chains
 - **FastAPI-ready** — repositories and units of work work directly as dependencies
 - **Alembic migrations** — async-first migration setup
 - **OpenTelemetry** — optional SQLAlchemy instrumentation
@@ -409,6 +411,37 @@ silently winning, and `update_if_match` gives the cheaper check first. Versions 
 a human-readable counter (`AuditableBase`) or a sortable UUIDv7 (`UUIDAuditableBase`), and
 `sqlargon.audit` relates other tables to one exact version or to whichever is newest. See
 the [documentation](https://asynq-io.github.io/sqlargon/auditable/) for the full picture.
+
+## Internationalization
+
+`sqlargon.i18n` keeps text in more than one locale and reads back whichever the current
+request wants. Register a locale getter and a fallback chain at startup, and attribute
+access stays a plain string in the active locale:
+
+```python
+from sqlargon.i18n import TranslatedString, Translation, set_fallback_chain, set_locale_getter
+
+set_locale_getter(lambda: request_locale.get())
+set_fallback_chain(lambda locale: (locale or "en", "en"))
+
+
+class Post(TranslationMixin, Base):
+    title: Mapped[Translation] = mapped_column(TranslatedString())
+
+
+await PostRepository().create(title={"en": "Hello", "pl": "Czesc"})
+
+post = await PostRepository().select().one()
+str(post.title)  # "Czesc" under a "pl" locale
+post.title.data  # {"en": "Hello", "pl": "Czesc"}
+```
+
+Every column operator is rewritten onto the active locale's text, so `Post.title == "Czesc"`,
+`.like(...)` and `order_by` need no join and no special syntax — the dialect-specific JSON
+read is handled per backend. Long text or many locales are better served by the second
+backend, `translation_table`, which keeps one row per locale in a side table and joins it
+through `TranslatedRepository`. See the
+[documentation](https://asynq-io.github.io/sqlargon/i18n/) for the full picture.
 
 ## FastAPI
 

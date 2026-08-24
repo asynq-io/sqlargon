@@ -53,6 +53,8 @@ Repository: [https://github.com/asynq-io/sqlargon](https://github.com/asynq-io/s
   reads and restore
 - **Vector search** — [embeddings with similarity, full-text and hybrid
   reciprocal-rank-fusion search](vectors.md) on PostgreSQL and SQLite
+- **Internationalization** — [multi-locale text](i18n.md) in a JSON column or a
+  translation table, with per-request locales and fallback chains
 - **FastAPI-ready** — repositories and units of work work directly as dependencies
 - **Alembic migrations** — async-first [migration setup](migrations.md)
 - **OpenTelemetry** — optional SQLAlchemy instrumentation
@@ -135,6 +137,7 @@ or from `DATABASE_*` environment variables.
 - **[Cron](cron.md)** — database-backed scheduling with namespaces and multi-instance safety.
 - **[Outbox](outbox.md)** — the transactional outbox pattern and its relay.
 - **[Vector Search](vectors.md)** — embeddings, similarity and hybrid search.
+- **[Internationalization](i18n.md)** — multi-locale text and per-request locales.
 - **[Auditable Models](auditable.md)** — append-only versioned history.
 - **[Examples](examples.md)** — end-to-end recipes: a FastAPI service, batch workers,
   multi-tenant sharding, testing.

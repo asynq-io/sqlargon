@@ -132,6 +132,64 @@ Generated from the source. See [Usage](../usage.md) for a narrative introduction
 
 ::: sqlargon.integrations.eventiq.eventiq_publisher
 
+## Vector search
+
+::: sqlargon.vectors.VectorRepository
+
+::: sqlargon.vectors.TextSearchRepository
+
+::: sqlargon.vectors.HybridVectorRepository
+
+::: sqlargon.vectors.VectorCollectionRepository
+
+::: sqlargon.vectors.EmbeddingMixin
+
+::: sqlargon.vectors.TextMixin
+
+::: sqlargon.vectors.AttributesMixin
+
+::: sqlargon.vectors.VectorCollectionMixin
+
+::: sqlargon.types.vector.Vector
+
+::: sqlargon.types.vector.DistanceMetric
+
+::: sqlargon.vectors.init_vectors
+
+::: sqlargon.vectors.register_sqlite_vector
+
+## Internationalization
+
+::: sqlargon.i18n.TranslatedRepository
+
+::: sqlargon.i18n.TranslatableMixin
+
+::: sqlargon.i18n.TranslatableBase
+
+::: sqlargon.i18n.TranslationMixin
+
+::: sqlargon.i18n.TranslatedString
+
+::: sqlargon.i18n.Translation
+
+::: sqlargon.i18n.translation_table
+
+::: sqlargon.i18n.translation_class
+
+::: sqlargon.i18n.current_translation
+
+::: sqlargon.i18n.set_locale_getter
+
+::: sqlargon.i18n.get_locale
+
+::: sqlargon.i18n.set_fallback_chain
+
+::: sqlargon.i18n.fallback_chain
+
+::: sqlargon.i18n.select_current
+
+::: sqlargon.i18n.as_translation
+
 ## ORM and types
 
 ::: sqlargon.orm.Base

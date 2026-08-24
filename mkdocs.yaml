@@ -27,6 +27,7 @@ nav:
   - "Outbox": outbox.md
   - "Vector Search": vectors.md
   - "Auditable Models": auditable.md
+  - "Internationalization": i18n.md
   - "Examples": examples.md
   - "Reference":
     - "Column Types & Mixins": reference/types.md
