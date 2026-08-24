@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping as MappingABC
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Text, cast
+from sqlalchemy import Integer, Text, cast
 
 from sqlargon.mixins import VersionedMixin
 from sqlargon.orm import VersionedModel
@@ -48,6 +48,12 @@ class VersionedRepository(SQLAlchemyRepository[VersionedModel], abstract=True):
         )
         if updated is None:
             # someone else modified the row first
+
+    A model bringing an integer ``version_id_col`` of its own is versioned
+    by a counter: the bump is the SQL expression ``version + 1``, which
+    ``bulk_update`` cannot carry -- an executemany binds one set of
+    parameters per row, and a SQL expression is the same for all of them --
+    so a counter is left alone there.
 
     The version column is left out of the default ``ON CONFLICT DO
     UPDATE`` set, so an upsert cannot silently clobber a version. Regular
@@ -106,6 +112,19 @@ class VersionedRepository(SQLAlchemyRepository[VersionedModel], abstract=True):
         return cls._version_generator() is False
 
     @classmethod
+    def _is_counter(cls) -> bool:
+        """Whether the version column is an integer counter.
+
+        SQLAlchemy normalises the default ``version_id_generator`` into a
+        callable incrementing the version it is handed, which a statement
+        level update has no way to call -- it never loads the row, so it has
+        no current version to pass, and every call would yield ``1``. Such a
+        column is bumped with a SQL expression instead.
+        """
+        col = cls._version_col()
+        return col is not None and isinstance(col.type, Integer)
+
+    @classmethod
     def _get_default_set(cls) -> set[str]:
         col = cls._version_col()
         excluded = {col.name} if col is not None else set()
@@ -114,19 +133,19 @@ class VersionedRepository(SQLAlchemyRepository[VersionedModel], abstract=True):
     def _with_version_increment(self, values: Values) -> Values:
         """Return ``values`` with the version column bumped."""
         col = self._version_col()
-        generator = self._version_generator()
-        if col is None or generator is False:
+        if col is None or self._is_server_versioned():
             return values
         name = col.name
-        if callable(generator):
+        if self._is_counter():
             if isinstance(values, MappingABC):
-                return {**values, name: generator(None)}
-            return [{**row, name: generator(None)} for row in values]
-        # generator is True — integer increment via SQL expression
+                return {**values, name: col + 1}
+            # a SQL expression is the same for every row, which is not what an
+            # executemany binding one set of parameters per row can carry
+            return values
+        generator = self._version_generator()
         if isinstance(values, MappingABC):
-            return {**values, name: col + 1}
-        # integer increment is not supported for executemany
-        return values
+            return {**values, name: generator(None)}
+        return [{**row, name: generator(None)} for row in values]
 
     def _version_filter(self, expected: Any) -> Any:
         """The guard matching ``expected`` against the version column.
@@ -155,7 +174,7 @@ class VersionedRepository(SQLAlchemyRepository[VersionedModel], abstract=True):
     ) -> None:
         col = self._version_col()
         generator = self._version_generator()
-        if col is not None and callable(generator):
+        if col is not None and not self._is_counter() and callable(generator):
             name = col.name
             values = [{**row, name: generator(None)} for row in values]
         await super().bulk_update(values, *args, on_=on_, **kwargs)
