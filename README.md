@@ -85,8 +85,8 @@ uv add sqlargon
 ```
 
 Optional extras: `postgres`, `sqlite`, `mysql`, `pagination` (cursor pagination),
-`cron`, `outbox`, `eventiq`, `opentelemetry`, or `standard` for all of them
-except `eventiq`:
+`cron`, `vectors`, `eventiq`, `opentelemetry`, or `standard` for the drivers,
+pagination, cron and OpenTelemetry:
 
 ```shell
 pip install "sqlargon[standard]"
@@ -333,7 +333,7 @@ Available strategies: `PageNumberPagination`, `TotalPageNumberPagination`,
 `sqlargon.outbox` implements the transactional outbox pattern: a write through the repository
 also appends a CloudEvent-shaped row to `outbox_events` **in the same transaction**, so an
 event can neither be lost by a rollback nor published for a row that never committed. A
-background relay then publishes them in write order (requires `sqlargon[outbox]`):
+background relay then publishes them in write order:
 
 ```python
 from sqlargon import Base

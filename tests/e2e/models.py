@@ -82,6 +82,24 @@ class ServerDefaults(Base):
     id: Mapped[UUID] = mapped_column(
         GUID(), primary_key=True, server_default=GenerateUUID()
     )
+    created_at: Mapped[datetime] = mapped_column(
+        Timestamp(), nullable=False, server_default=now()
+    )
+
+
+class ServerDefaultsUUIDV7(Base):
+    """A row filled by the server, plus a server side ``uuidv7()`` column.
+
+    ``uuidv7()`` is a PostgreSQL 18 builtin, so the DDL cannot run on a
+    PostgreSQL 17 server; the table is only created on backends that accept
+    it.
+    """
+
+    __tablename__ = "e2e_server_defaults_uuidv7"
+
+    id: Mapped[UUID] = mapped_column(
+        GUID(), primary_key=True, server_default=GenerateUUID()
+    )
     uuid_v7: Mapped[UUID] = mapped_column(
         GUID(), nullable=False, server_default=GenerateUUIDV7()
     )
@@ -289,11 +307,12 @@ TABLES: tuple[sa.Table, ...] = _tables(
     AuditComment,
     AuditFollow,
     AuditArticle,
-    UUIDAuditArticle,
-    VectorNote,
-    VectorDoc,
-    VectorCollection,
 )
+
+#: Tables the vector suite needs, which only a backend that can search vectors
+#: creates -- ``VectorDoc`` and ``VectorCollection`` carry a ``uuidv7()`` server
+#: default on top of the VECTOR columns, so a pre-18 PostgreSQL rejects the DDL.
+VECTOR_TABLES: tuple[sa.Table, ...] = _tables(VectorNote, VectorDoc, VectorCollection)
 
 #: Tables whose DDL carries a server side UUID default, which not every
 #: backend accepts -- see :attr:`~tests.e2e.backends.Backend.server_side_uuid`.
@@ -301,3 +320,10 @@ SERVER_DEFAULT_TABLES: tuple[sa.Table, ...] = _tables(ServerDefaults)
 
 #: Tables that only PostgreSQL can hold (the ``xmin`` system column).
 XMIN_TABLES: tuple[sa.Table, ...] = _tables(XminUser)
+
+#: Tables whose DDL carries the server side ``uuidv7()`` default, a
+#: PostgreSQL 18 builtin the 17 backend rejects -- ``UUIDAuditArticle``
+#: versions its rows with it.
+UUIDV7_SERVER_DEFAULT_TABLES: tuple[sa.Table, ...] = _tables(
+    ServerDefaultsUUIDV7, UUIDAuditArticle
+)

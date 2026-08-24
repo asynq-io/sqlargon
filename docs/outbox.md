@@ -7,7 +7,6 @@ publishes those rows to a broker. Because the row and its event commit or roll
 back together, an event can neither be lost by a rollback nor published for a
 row that never committed.
 
-It requires the `sqlargon[outbox]` extra (`anyio`, for the relay).
 
 ```python
 import sqlalchemy as sa

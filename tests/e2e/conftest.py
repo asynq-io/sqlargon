@@ -23,6 +23,8 @@ from .backends import Backend, parse_backends
 from .models import (
     SERVER_DEFAULT_TABLES,
     TABLES,
+    UUIDV7_SERVER_DEFAULT_TABLES,
+    VECTOR_TABLES,
     XMIN_TABLES,
     AuditArticleRepository,
     AuditCommentRepository,
@@ -82,8 +84,12 @@ def tables(backend: Backend) -> tuple[sa.Table, ...]:
     result = TABLES
     if backend.server_side_uuid:
         result = result + SERVER_DEFAULT_TABLES
+    if backend.server_side_uuidv7:
+        result = result + UUIDV7_SERVER_DEFAULT_TABLES
     if backend.dialect == "postgresql":
         result = result + XMIN_TABLES
+    if backend.vector_search:
+        result = result + VECTOR_TABLES
     return result
 
 
@@ -104,7 +110,7 @@ def schema(
         engine = create_async_engine(database_url)
         try:
             async with engine.begin() as connection:
-                if create and backend.dialect == "postgresql":
+                if create and backend.dialect == "postgresql" and backend.vector_search:
                     await connection.execute(
                         sa.text("CREATE EXTENSION IF NOT EXISTS vector")
                     )
@@ -159,6 +165,12 @@ def needs_native_locks(backend: Backend) -> None:
 def needs_server_side_uuid(backend: Backend) -> None:
     if not backend.server_side_uuid:
         pytest.skip(f"{backend.name} rejects a generated UUID as a column default")
+
+
+@pytest.fixture
+def needs_server_side_uuidv7(backend: Backend) -> None:
+    if not backend.server_side_uuidv7:
+        pytest.skip(f"{backend.name} lacks uuidv7(), a PostgreSQL 18 server builtin")
 
 
 @pytest.fixture

@@ -1,6 +1,6 @@
 [project]
 name = "sqlargon"
-version = "1.0.4b1"
+version = "1.0.0"
 description = "SQLAlchemy repository pattern and utilities"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
@@ -8,6 +8,7 @@ authors = [{ name = "RaRhAeu", email = "rarha_eu@protonmail.com" }]
 dependencies = [
     "sqlalchemy>2.0,<3",
     "alembic>=1.13.1,<2",
+    "anyio>=4.0,<5",
     "orjson>=3.11.9,<4",
     "pydantic>=2.0,<3",
     "pydantic-settings>=2.1.0,<3",
@@ -15,21 +16,21 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-fastapi = ["fastapi>=0.115,<1"]
-postgres = ["asyncpg<1.0"]
+postgres = ["asyncpg<1.0","alembic-postgresql-enum>=1.8.0,<2.0.0"]
 sqlite = ["aiosqlite>=0.19.0,<1"]
 mysql = ["asyncmy>=0.2.11"]
 pagination = ["sqlakeyset>=2.0.1716332987,<3"]
 cron = ["croniter>=2.0,<7", "anyio>=4.0,<5"]
-outbox = ["anyio>=4.0,<5"]
-eventiq = ["eventiq>=1.1.14,<2"]
 opentelemetry = ["opentelemetry-instrumentation-sqlalchemy"]
 
-standard = ["asyncpg<1.0", "aiosqlite>=0.19.0,<1", "sqlakeyset>=2.0.1716332987,<3", "croniter>=2.0,<7", "anyio>=4.0,<5", "opentelemetry-instrumentation-sqlalchemy"]
+fastapi = ["fastapi>=0.115,<1"]
+eventiq = ["eventiq>=1.1.14,<2"]
+
 vectors = [
     "pgvector>=0.5.0",
+    "sqliteai-vector>=1.0.0,<2"
 ]
-vectors-sqlite = ["sqliteai-vector>=1.0.0,<2"]
+standard = ["sqlargon[postgres,sqlite,pagination,cron,opentelemetry]"]
 
 [dependency-groups]
 dev = [
@@ -182,10 +183,14 @@ max-complexity = 8
 DEP001 = ["opentelemetry"]
 DEP002 = [
     "alembic",
+    # an alembic autogenerate plugin, loaded by name rather than imported
+    "alembic-postgresql-enum",
     "asyncpg",
     "aiosqlite",
     "asyncmy",
     "opentelemetry-instrumentation-sqlalchemy",
+    # the "standard" extra names the package's own extras
+    "sqlargon",
 ]
 DEP003 = ["sqlargon", "typing_extensions", "pydantic_core", "starlette"]
 

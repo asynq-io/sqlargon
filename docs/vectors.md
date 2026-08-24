@@ -5,8 +5,8 @@ column type, the model mixins and the repositories are all separate, so a model
 takes only the pieces it needs — an embedding alone, or an embedding beside
 text, JSON attributes and a collection.
 
-It requires the `sqlargon[vectors]` extra (`pgvector`), plus
-`sqlargon[vectors-sqlite]` (`sqliteai-vector`) to search on SQLite.
+It requires the `sqlargon[vectors]` extra (`pgvector` to search on
+PostgreSQL, `sqliteai-vector` to search on SQLite).
 
 ```python
 from sqlalchemy.orm import declared_attr

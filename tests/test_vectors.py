@@ -550,7 +550,7 @@ async def test_init_vectors_rejects_an_unsupported_dialect():
 @pytest.mark.anyio
 async def test_register_sqlite_vector_reports_the_missing_package(monkeypatch, db):
     monkeypatch.setitem(sys.modules, "sqlite_vector", None)
-    with pytest.raises(ImportError, match="vectors-sqlite"):
+    with pytest.raises(ImportError, match="sqliteai-vector"):
         register_sqlite_vector(db.engine)
 
 

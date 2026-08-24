@@ -51,7 +51,7 @@ def register_sqlite_vector(engine: AsyncEngine) -> None:
     except ImportError as e:
         msg = (
             "SQLite vector search requires the 'sqliteai-vector' package; "
-            "install 'sqlargon[vectors-sqlite]'"
+            "install 'sqlargon[vectors]'"
         )
         raise ImportError(msg) from e
 

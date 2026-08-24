@@ -18,21 +18,29 @@ if TYPE_CHECKING:
     from contextlib import AbstractContextManager
     from pathlib import Path
 
-# ``uuidv7()`` is a PostgreSQL 18 builtin, so GenerateUUIDV7 needs at least it.
-# The pgvector image is that PostgreSQL plus the extension the vector suite
-# needs, so it stands in for the plain one rather than adding a backend.
+# ``uuidv7()`` is a PostgreSQL 18 builtin, so GenerateUUIDV7 needs at least it;
+# postgres17 is run without the v7 server default to pin what still works there.
+# The 18 image is the pgvector build -- that PostgreSQL plus the extension the
+# vector suite needs -- so it stands in for the plain one rather than adding a
+# backend; 17 has no use for it, the vector tables being uuidv7() defaulted.
 POSTGRES_IMAGE = os.environ.get("SQLARGON_E2E_POSTGRES_IMAGE", "pgvector/pgvector:pg18")
+POSTGRES_17_IMAGE = os.environ.get(
+    "SQLARGON_E2E_POSTGRES_17_IMAGE", "postgres:17-alpine"
+)
 MYSQL_IMAGE = os.environ.get("SQLARGON_E2E_MYSQL_IMAGE", "mysql:8.4")
 # RANDOM_BYTES, which the UUID server defaults use, needs MariaDB 10.10
 MARIADB_IMAGE = os.environ.get("SQLARGON_E2E_MARIADB_IMAGE", "mariadb:11.4")
 
 
-@contextmanager
-def _postgres_url(_directory: Path) -> Generator[str]:
-    from testcontainers.community.postgres import PostgresContainer
+def _postgres_url(image: str) -> Callable[[Path], AbstractContextManager[str]]:
+    @contextmanager
+    def url(_directory: Path) -> Generator[str]:
+        from testcontainers.community.postgres import PostgresContainer
 
-    with PostgresContainer(POSTGRES_IMAGE, driver="asyncpg") as container:
-        yield container.get_connection_url()
+        with PostgresContainer(image, driver="asyncpg") as container:
+            yield container.get_connection_url()
+
+    return url
 
 
 @contextmanager
@@ -96,6 +104,7 @@ class Backend:
     delete_returning: bool
     native_locks: bool
     server_side_uuid: bool
+    server_side_uuidv7: bool
     skip_locked: bool
     json_key_operators: bool
     #: an upsert may leave a column of the conflict set out of its values
@@ -121,6 +130,7 @@ BACKENDS: dict[str, Backend] = {
         delete_returning=True,
         native_locks=False,
         server_side_uuid=True,
+        server_side_uuidv7=True,
         skip_locked=False,
         # the SQLite key operators match JSON values, not object keys
         json_key_operators=False,
@@ -130,15 +140,32 @@ BACKENDS: dict[str, Backend] = {
         name="postgres",
         dialect="postgresql",
         driver="asyncpg",
-        url=_postgres_url,
+        url=_postgres_url(POSTGRES_IMAGE),
         insert_returning=True,
         update_returning=True,
         delete_returning=True,
         native_locks=True,
         server_side_uuid=True,
+        server_side_uuidv7=True,
         skip_locked=True,
         json_key_operators=True,
         vector_search=True,
+    ),
+    "postgres17": Backend(
+        name="postgres17",
+        dialect="postgresql",
+        driver="asyncpg",
+        url=_postgres_url(POSTGRES_17_IMAGE),
+        insert_returning=True,
+        update_returning=True,
+        delete_returning=True,
+        native_locks=True,
+        server_side_uuid=True,
+        # uuidv7() is a PostgreSQL 18 builtin the 17 server lacks, and the
+        # vector tables are defaulted from it, so they cannot be created here
+        server_side_uuidv7=False,
+        skip_locked=True,
+        json_key_operators=True,
     ),
     "mysql": Backend(
         name="mysql",
@@ -151,6 +178,7 @@ BACKENDS: dict[str, Backend] = {
         delete_returning=False,
         native_locks=True,
         server_side_uuid=True,
+        server_side_uuidv7=True,
         skip_locked=True,
         json_key_operators=True,
         # 8.0.19+ names the conflicting row with an alias exposing only the
@@ -168,6 +196,7 @@ BACKENDS: dict[str, Backend] = {
         delete_returning=True,
         native_locks=True,
         server_side_uuid=True,
+        server_side_uuidv7=True,
         skip_locked=True,
         json_key_operators=True,
         is_mariadb=True,

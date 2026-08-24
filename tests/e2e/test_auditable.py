@@ -283,6 +283,7 @@ async def test_a_pinned_version_cannot_be_purged(
 # --- the UUIDv7 strategy ---
 
 
+@pytest.mark.usefixtures("needs_server_side_uuidv7")
 async def test_uuid_strategy_appends_sortable_versions(uuid_audit_articles):
     entity_id = uuid4()
 
@@ -299,6 +300,7 @@ async def test_uuid_strategy_appends_sortable_versions(uuid_audit_articles):
     assert (await uuid_audit_articles.get(id=entity_id)).name == "final"
 
 
+@pytest.mark.usefixtures("needs_server_side_uuidv7")
 async def test_uuid_strategy_deletes_by_appending_a_tombstone(uuid_audit_articles):
     entity_id = uuid4()
     await uuid_audit_articles.create(id=entity_id, name="draft")
