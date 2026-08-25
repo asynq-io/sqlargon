@@ -2307,7 +2307,7 @@ wheels = [
 
 [[package]]
 name = "sqlargon"
-version = "1.0.1b1"
+version = "1.1.0b1"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
