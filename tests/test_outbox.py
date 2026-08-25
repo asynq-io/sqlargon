@@ -6,6 +6,7 @@ fixture, module-level models to survive ``--count=3`` re-registration.
 
 from contextvars import ContextVar
 from datetime import timedelta
+from types import SimpleNamespace
 from uuid import uuid4
 
 import anyio
@@ -125,7 +126,7 @@ class TagRepository(OutboxRepository[OutboxTag]):
 
 class OrganizationUserRepository(OutboxRepository[OrganizationUser]):
     outbox = OutboxConfig(
-        topic="events.organizations.{organization_id}.users.{id}.created",
+        topic="events.organizations.{organization_id}.users.{id}.{operation}",
         type_prefix="org_user",
     )
 
@@ -186,7 +187,7 @@ def events():
 
 
 async def stored(events: EventRepository) -> list[OutboxEvent]:
-    return list(await events.select().order_by(OutboxEvent.created_at).all())
+    return list(await events.select().order_by(OutboxEvent.id).all())
 
 
 # --- configuration ---
@@ -285,6 +286,21 @@ def test_format_topic_fills_an_id_placeholder():
     assert format_topic("events.users.{id}", row) == f"events.users.{row.id}"
 
 
+def test_format_topic_fills_an_operation_placeholder():
+    row = OrganizationUser(id=uuid4(), organization_id=uuid4())
+
+    assert (
+        format_topic("events.users.{id}.{operation}", row, Operation.DELETED)
+        == f"events.users.{row.id}.deleted"
+    )
+
+
+def test_an_operation_placeholder_wins_over_a_column_of_that_name():
+    row = SimpleNamespace(operation="whatever")
+
+    assert format_topic("{operation}", row, Operation.UPDATED) == "updated"
+
+
 def test_a_missing_attribute_raises_like_str_format_does():
     row = OrganizationUser()
 
@@ -319,15 +335,31 @@ async def test_each_row_of_a_bulk_write_gets_its_own_topic(org_users, events):
 
 
 async def test_a_templated_topic_is_filled_at_write_time(org_users, events):
+    first, second = uuid4(), uuid4()
+    user = await org_users.create(name="John", organization_id=first)
+
+    await org_users.update_one({"organization_id": second}, id=user.id)
+
+    topics = [event.topic for event in await stored(events)]
+    assert topics == [
+        f"events.organizations.{first}.users.{user.id}.created",
+        f"events.organizations.{second}.users.{user.id}.updated",
+    ]
+
+
+async def test_an_operation_placeholder_follows_the_write(org_users, events):
     organization = uuid4()
     user = await org_users.create(name="John", organization_id=organization)
 
     await org_users.update_one({"name": "Jane"}, id=user.id)
+    await org_users.remove(id=user.id)
 
+    prefix = f"events.organizations.{organization}.users.{user.id}"
     topics = [event.topic for event in await stored(events)]
     assert topics == [
-        f"events.organizations.{organization}.users.{user.id}.created",
-        f"events.organizations.{organization}.users.{user.id}.created",
+        f"{prefix}.created",
+        f"{prefix}.updated",
+        f"{prefix}.deleted",
     ]
 
 

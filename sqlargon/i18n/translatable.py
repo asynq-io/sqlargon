@@ -178,8 +178,11 @@ class TranslatableMixin(TranslationMixin):
     @declared_attr
     @classmethod
     def _translations(cls) -> Mapped[dict[str, Any]]:
+        def target() -> type[Any]:
+            return translation_class(cls)
+
         return relationship(
-            lambda: translation_class(cls),
+            target,
             collection_class=attribute_keyed_dict("locale"),
             cascade="all, delete-orphan",
             lazy="selectin",
@@ -188,9 +191,15 @@ class TranslatableMixin(TranslationMixin):
     @declared_attr
     @classmethod
     def _current_translation(cls) -> Mapped[Any]:
+        def target() -> type[Any]:
+            return translation_class(cls)
+
+        def primaryjoin() -> Any:
+            return _locale_join(cls, current_locale())
+
         return relationship(
-            lambda: translation_class(cls),
-            primaryjoin=lambda: _locale_join(cls, current_locale()),
+            target,
+            primaryjoin=primaryjoin,
             uselist=False,
             viewonly=True,
             lazy="raise",

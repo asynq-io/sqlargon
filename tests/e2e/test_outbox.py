@@ -68,8 +68,7 @@ async def test_update_and_delete_are_recorded(
     await outbox_users.remove(OutboxUser.id == user.id)
 
     types = [
-        event.type
-        for event in await events.select().order_by(OutboxEvent.created_at).all()
+        event.type for event in await events.select().order_by(OutboxEvent.id).all()
     ]
     assert types == ["user.created", "user.updated", "user.deleted"]
 
@@ -92,7 +91,7 @@ async def test_an_upsert_records_what_each_row_turned_out_to_be(
 
     recorded = {
         event.data["name"]: event.type
-        for event in await events.select().order_by(OutboxEvent.created_at).all()
+        for event in await events.select().order_by(OutboxEvent.id).all()
     }
     assert recorded == {
         "John": "user.created",

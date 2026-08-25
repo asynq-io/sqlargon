@@ -4,13 +4,13 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column
 
-from sqlargon.mixins import CreatedUpdatedMixin, UUIDModelMixin
+from sqlargon.mixins import CreatedUpdatedMixin, UUIDV7ModelMixin
 from sqlargon.orm import Base
 from sqlargon.types import JSON, Timestamp, now
 from sqlargon.utils import utc_now
 
 
-class OutboxEvent(UUIDModelMixin, CreatedUpdatedMixin, Base):
+class OutboxEvent(UUIDV7ModelMixin, CreatedUpdatedMixin, Base):
     """A CloudEvent awaiting publication.
 
     ``id`` is the CloudEvent ``id`` and ``created_at`` its ``time``; the
@@ -24,9 +24,7 @@ class OutboxEvent(UUIDModelMixin, CreatedUpdatedMixin, Base):
 
     __tablename__ = "outbox_events"
     __table_args__ = (
-        sa.Index(
-            "idx_outbox_events_pending", "published_at", "available_at", "created_at"
-        ),
+        sa.Index("idx_outbox_events_pending", "published_at", "id", "available_at"),
     )
 
     topic: Mapped[str] = mapped_column(sa.String(255), nullable=False)

@@ -105,6 +105,29 @@ the row — and its value is stringified as it is: a `UUID` becomes its
 canonical string form. `{id}` reads the row's `id`, `{organization_id}` its
 `organization_id`, and so on.
 
+`{operation}` is the exception: it names the write rather than the row, and is
+filled with `created`, `updated` or `deleted` — the same word the event `type`
+ends in. One template then serves every operation:
+
+```python
+class UserRepository(OutboxRepository[User]):
+    outbox = OutboxConfig(
+        topic="events.organizations.{organization_id}.users.{id}.{operation}",
+        type_prefix="user",
+    )
+
+
+user = await UserRepository().create(name="John", organization_id=21)
+# -> topic "events.organizations.21.users.<id>.created"
+await UserRepository().update({"name": "Jane"}, id=user.id)
+# -> topic "events.organizations.21.users.<id>.updated"
+await UserRepository().remove(id=user.id)
+# -> topic "events.organizations.21.users.<id>.deleted"
+```
+
+A column named `operation` is shadowed by it; name the placeholder for the
+write and read the column from the payload.
+
 The value is read the same way the payload and the extra attributes are: from
 the row the write produced (before it, for a delete). It is read **when the
 write happens**, not when the relay publishes the event, so a templated topic
@@ -112,8 +135,8 @@ always reflects the state at write time. A repository serves one event per
 written row, so a bulk write of rows from different organizations lands on
 their own topics.
 
-`format_topic(topic, row)` does the substitution on its own and is exported
-from `sqlargon.outbox`.
+`format_topic(topic, row, operation)` does the substitution on its own and is
+exported from `sqlargon.outbox`.
 
 ### Extra attributes
 
@@ -230,8 +253,8 @@ an existing task group with `await tg.start(relay.run)`.
 Delivery semantics:
 
 - Events are published **one at a time, in the order they were written**
-  (`created_at`, then `id`). An outbox that reorders its events is not much of
-  an outbox.
+  (by `id`, a UUIDv7 and so sortable by write time). An outbox that reorders
+  its events is not much of an outbox.
 - A publisher that raises stops the batch, so a broker outage delays the
   events behind the failed one rather than letting them overtake it. The
   failure is logged (logger `sqlargon.outbox.relay`), recorded in
@@ -356,8 +379,8 @@ it, and an Alembic autogenerate pass picks it up (see
 
 | Column | Purpose |
 | --- | --- |
-| `id` | The CloudEvents `id`. |
-| `created_at` | The CloudEvents `time`, and the dispatch order. |
+| `id` | The CloudEvents `id`, a UUIDv7 -- and the dispatch order. |
+| `created_at` | The CloudEvents `time`. |
 | `topic`, `type`, `source` | The CloudEvents routing attributes. |
 | `data` | The row snapshot, as JSON. |
 | `attributes` | The extra CloudEvents attributes, as JSON. |

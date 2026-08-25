@@ -44,10 +44,18 @@ class Operation(str, Enum):
 ALL_OPERATIONS = frozenset(Operation)
 
 
-def format_topic(topic: str, row: Any) -> str:
+def format_topic(topic: str, row: Any, operation: Operation | None = None) -> str:
+    """Fill a topic's placeholders from the row the event was written from.
+
+    ``{operation}`` names the write itself rather than an attribute of the
+    row, and wins over a column of that name.
+    """
     if "{" not in topic:
         return topic
-    return topic.format(**vars(row))
+    values = dict(vars(row))
+    if operation is not None:
+        values["operation"] = operation.value
+    return topic.format(**values)
 
 
 @dataclass(frozen=True, slots=True)

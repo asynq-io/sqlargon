@@ -58,7 +58,7 @@ class OutboxEventRepository(SQLAlchemyRepository[OutboxEvent]):
             events = await (
                 self.select(with_for_update={"skip_locked": True})
                 .filter(*filters)
-                .order_by(OutboxEvent.created_at, OutboxEvent.id)
+                .order_by(OutboxEvent.id)
                 .limit(limit)
                 .all()
             )
@@ -164,7 +164,8 @@ class OutboxRepository(SQLAlchemyRepository[Model], abstract=True):
 
         The configured topic, or the table name when none is configured. A
         topic with ``{placeholders}`` is a template: each event's topic is
-        filled from the row it was written from.
+        filled from the row it was written from, and ``{operation}`` from the
+        write that produced it.
         """
         return self.outbox.topic or self.model.__tablename__
 
@@ -232,7 +233,7 @@ class OutboxRepository(SQLAlchemyRepository[Model], abstract=True):
         topic = self.topic
         return [
             {
-                "topic": format_topic(topic, row),
+                "topic": format_topic(topic, row, operation),
                 "type": event_type,
                 "source": self.outbox.source,
                 "data": to_jsonable_python(
