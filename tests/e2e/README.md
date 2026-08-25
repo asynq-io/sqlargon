@@ -78,10 +78,10 @@ Known gaps:
 - The SQLite `has_any_key`/`has_all_keys` operators match JSON values, not
   object keys.
 - `GenerateUUIDV7` needs PostgreSQL 18 for `uuidv7()`, and falls back to a
-  random, v4 shaped value on SQLite. The `postgres17` backend runs the same
-  server without that column: the `server_side_uuidv7` capability is off, so
-  the `uuidv7()` table is not created and the test for it is skipped, pinning
-  that the rest of the suite still passes on a pre-18 server.
+  random, v4 shaped value below it and on SQLite. Every table is created on
+  the `postgres17` backend all the same, since the fallback is what its DDL
+  gets; only the test asserting a server generated value really is a v7 is
+  skipped, the `server_side_uuidv7` capability being off there.
 - **Vector search** needs pgvector on PostgreSQL and the `sqliteai-vector`
   loadable extension on SQLite, so `vector_search` is off for the MySQL family
   and for `postgres17` — `VectorDoc` and `VectorCollection` are `uuidv7()`

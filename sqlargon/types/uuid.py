@@ -52,19 +52,36 @@ class GenerateUUIDV7(FunctionElement):
     name = "uuidv7_default"
 
 
+#: The PostgreSQL release that made ``uuidv7()`` a server builtin.
+POSTGRESQL_UUIDV7_VERSION = (18,)
+
+
 @compiles(GenerateUUID, "postgresql")
 @compiles(GenerateUUID)
-def _generate_uuid_postgresql(
-    _element: GenerateUUID, _compiler: Any, **_kwargs: Any
-) -> str:
+def _generate_uuid_postgresql(_element: Any, _compiler: Any, **_kwargs: Any) -> str:
     return "GEN_RANDOM_UUID()"
 
 
 @compiles(GenerateUUIDV7, "postgresql")
 @compiles(GenerateUUIDV7)
 def _generate_uuidv7_postgresql(
-    _element: GenerateUUID, _compiler: Any, **_kwargs: Any
+    element: GenerateUUIDV7, compiler: Any, **kwargs: Any
 ) -> str:
+    """
+    Generates a UUID v7 in PostgreSQL 18+, which has ``uuidv7()`` builtin.
+
+    An older server falls back to :func:`_generate_uuid_postgresql`, so the
+    DDL it rejects still runs -- at the cost of a random, v4 value rather
+    than a time ordered one. The version is only known once the dialect has
+    seen a server, so the builtin is what an unconnected dialect compiles.
+    """
+    version = compiler.dialect.server_version_info
+    if (
+        compiler.dialect.name == "postgresql"
+        and version is not None
+        and tuple(version) < POSTGRESQL_UUIDV7_VERSION
+    ):
+        return _generate_uuid_postgresql(element, compiler, **kwargs)
     return "uuidv7()"
 
 

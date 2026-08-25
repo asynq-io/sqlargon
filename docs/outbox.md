@@ -391,7 +391,11 @@ it, and an Alembic autogenerate pass picks it up (see
 | `last_error` | Why the last attempt failed. |
 
 Every column carries a server default as well as a client one, so a row
-inserted without naming them is still complete.
+inserted without naming them is still complete. `id` defaults to `uuidv7()`,
+which is a PostgreSQL 18 builtin — an older server
+[falls back](reference/types.md#uuids) to a random v4 value, so a row the
+library itself writes is still a UUIDv7 (the client default mints it), while
+one inserted by raw SQL there is not, and so does not sort by write time.
 
 `OutboxEventRepository` exposes the table directly, for monitoring or for a
 dispatcher of your own: `pending_count()`, `claim_pending()`,

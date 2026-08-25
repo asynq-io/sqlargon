@@ -24,7 +24,6 @@ from .backends import Backend, parse_backends
 from .models import (
     SERVER_DEFAULT_TABLES,
     TABLES,
-    UUIDV7_SERVER_DEFAULT_TABLES,
     VECTOR_TABLES,
     XMIN_TABLES,
     AuditArticleRepository,
@@ -87,8 +86,6 @@ def tables(backend: Backend) -> tuple[sa.Table, ...]:
     result = TABLES
     if backend.server_side_uuid:
         result = result + SERVER_DEFAULT_TABLES
-    if backend.server_side_uuidv7:
-        result = result + UUIDV7_SERVER_DEFAULT_TABLES
     if backend.dialect == "postgresql":
         result = result + XMIN_TABLES
     if backend.vector_search:
@@ -214,7 +211,7 @@ def needs_server_side_uuid(backend: Backend) -> None:
 @pytest.fixture
 def needs_server_side_uuidv7(backend: Backend) -> None:
     if not backend.server_side_uuidv7:
-        pytest.skip(f"{backend.name} lacks uuidv7(), a PostgreSQL 18 server builtin")
+        pytest.skip(f"{backend.name} defaults a UUIDv7 column to a v4 fallback")
 
 
 @pytest.fixture

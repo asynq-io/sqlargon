@@ -336,6 +336,10 @@ def _tables(*models: type[Base]) -> tuple[sa.Table, ...]:
 
 #: Tables every backend can hold; the only ones the e2e suite creates.
 #:
+#: The ``uuidv7()`` defaulted ones are among them: a pre-18 PostgreSQL has no
+#: such builtin, but ``GenerateUUIDV7`` falls back to ``GEN_RANDOM_UUID()``
+#: there, so the DDL still runs -- only the value is not a v7.
+#:
 #: A child referencing an audited version comes before the table it points at,
 #: so the per test cleanup can empty them in this order without tripping the
 #: foreign key.
@@ -349,14 +353,15 @@ TABLES: tuple[sa.Table, ...] = _tables(
     AuditComment,
     AuditFollow,
     AuditArticle,
+    UUIDAuditArticle,
+    ServerDefaultsUUIDV7,
     I18nPost,
     I18nArticleTranslation,
     I18nArticle,
 )
 
 #: Tables the vector suite needs, which only a backend that can search vectors
-#: creates -- ``VectorDoc`` and ``VectorCollection`` carry a ``uuidv7()`` server
-#: default on top of the VECTOR columns, so a pre-18 PostgreSQL rejects the DDL.
+#: creates -- their VECTOR columns name a type the others have no extension for.
 VECTOR_TABLES: tuple[sa.Table, ...] = _tables(VectorNote, VectorDoc, VectorCollection)
 
 #: Tables whose DDL carries a server side UUID default, which not every
@@ -365,10 +370,3 @@ SERVER_DEFAULT_TABLES: tuple[sa.Table, ...] = _tables(ServerDefaults)
 
 #: Tables that only PostgreSQL can hold (the ``xmin`` system column).
 XMIN_TABLES: tuple[sa.Table, ...] = _tables(XminUser)
-
-#: Tables whose DDL carries the server side ``uuidv7()`` default, a
-#: PostgreSQL 18 builtin the 17 backend rejects -- ``UUIDAuditArticle``
-#: versions its rows with it.
-UUIDV7_SERVER_DEFAULT_TABLES: tuple[sa.Table, ...] = _tables(
-    ServerDefaultsUUIDV7, UUIDAuditArticle
-)

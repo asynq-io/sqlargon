@@ -118,6 +118,23 @@ def test_generate_uuid_postgresql(element, expected):
 
 
 @pytest.mark.parametrize(
+    ("server_version_info", "expected"),
+    [
+        ((17, 4), "GEN_RANDOM_UUID()"),
+        ((18, 0), "uuidv7()"),
+        (None, "uuidv7()"),
+    ],
+)
+def test_generate_uuidv7_falls_back_below_postgresql_18(server_version_info, expected):
+    dialect = postgresql.dialect()
+    dialect.server_version_info = server_version_info
+
+    assert _compile(sa.select(GenerateUUIDV7()), dialect).startswith(
+        f"SELECT {expected}"
+    )
+
+
+@pytest.mark.parametrize(
     ("element", "expected", "not_expected"),
     [
         (GenerateUUID, "'-4'", "UNIX_TIMESTAMP"),

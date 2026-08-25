@@ -33,12 +33,15 @@ class User(Base):
 | Element | PostgreSQL | MySQL | SQLite |
 | --- | --- | --- | --- |
 | `GenerateUUID` | `GEN_RANDOM_UUID()` | `RANDOM_BYTES`-based v4 expression | `randomblob`-based v4 expression |
-| `GenerateUUIDV7` | `uuidv7()` | `NOW(3)` + `RANDOM_BYTES` v7 expression | same v4 expression as above |
+| `GenerateUUIDV7` | `uuidv7()`, or `GEN_RANDOM_UUID()` below 18 | `NOW(3)` + `RANDOM_BYTES` v7 expression | same v4 expression as above |
 
-`uuidv7()` requires a PostgreSQL server that ships the function (18+, or an extension), and
-the MySQL v7 expression requires MySQL 5.6.4+. SQLite has no UUID v7 equivalent — it falls
-back to the random v4 expression, so rely on the client-side `default=uuid7` there if
-ordering matters.
+`uuidv7()` is a PostgreSQL 18 builtin. On an older server `GenerateUUIDV7` compiles to
+`GEN_RANDOM_UUID()` instead, so the DDL still runs — the default just yields a random v4
+value rather than a time-ordered one. The version is read off the connected dialect, so a
+dialect that has not seen a server yet (an offline `create_all()` dump, say) compiles the
+builtin. The MySQL v7 expression requires MySQL 5.6.4+, and SQLite has no UUID v7
+equivalent — it falls back to the random v4 expression too. Where the fallback applies,
+rely on the client-side `default=uuid7` if ordering matters.
 
 ## Timestamps
 
