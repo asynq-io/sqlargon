@@ -38,6 +38,13 @@ decorated function cleans up its row on the next start.
 async def send_report() -> None: ...
 ```
 
+`task()` also takes the function outright, for one that is not yours to
+decorate — a method of an object built elsewhere, say:
+
+```python
+cron.task("0 3 * * *", "purge_outbox", relay.purge)
+```
+
 Sync only ever deletes rows it created (they are marked as declarative), so
 imperative tasks in the same namespace are never deleted. Declaring a name
 that an imperative row already holds takes that row over — the declaration is

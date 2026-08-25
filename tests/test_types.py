@@ -1,3 +1,4 @@
+import contextlib
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
@@ -10,12 +11,23 @@ from sqlalchemy.engine.default import DefaultDialect
 from sqlargon.orm import Base as _Base
 from sqlargon.types import GUID, JSON, GenerateUUID, GenerateUUIDV7, Timestamp, now
 from sqlargon.types.json import (
+    json_array_append,
+    json_array_length,
     json_contains,
+    json_get,
     json_has_all_keys,
     json_has_any_key,
+    json_has_key,
+    json_insert_key,
+    json_keys,
+    json_remove_key,
+    json_replace_key,
+    json_set_key,
+    json_update,
     json_value,
 )
 from sqlargon.types.pydantic import Pydantic, ValidatedType
+from sqlargon.utils import json_loads
 
 
 def _compile(expr, dialect, *, literal_binds=True) -> str:
@@ -101,6 +113,23 @@ def test_guid_dialect_impl_postgresql():
 )
 def test_generate_uuid_postgresql(element, expected):
     assert _compile(sa.select(element()), postgresql.dialect()).startswith(
+        f"SELECT {expected}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("server_version_info", "expected"),
+    [
+        ((17, 4), "GEN_RANDOM_UUID()"),
+        ((18, 0), "uuidv7()"),
+        (None, "uuidv7()"),
+    ],
+)
+def test_generate_uuidv7_falls_back_below_postgresql_18(server_version_info, expected):
+    dialect = postgresql.dialect()
+    dialect.server_version_info = server_version_info
+
+    assert _compile(sa.select(GenerateUUIDV7()), dialect).startswith(
         f"SELECT {expected}"
     )
 
@@ -245,6 +274,23 @@ def test_json_dialect_impl_fallback(dialect):
     assert impl.none_as_null is True
 
 
+# --- JSON literal rendering ---
+
+
+@pytest.mark.parametrize(
+    "dialect", [postgresql.dialect(), sqlite.dialect(), mysql.dialect()]
+)
+def test_json_literal_processor_renders_null(dialect):
+    assert JSON().literal_processor(dialect)(None) == "NULL"
+
+
+@pytest.mark.parametrize(
+    "dialect", [postgresql.dialect(), sqlite.dialect(), mysql.dialect()]
+)
+def test_json_literal_processor_serializes_and_quotes_a_document(dialect):
+    assert JSON().literal_processor(dialect)({"a": 1}) == "'{\"a\":1}'"
+
+
 # --- JSON per-dialect compilation ---
 
 _json_col = sa.column("data", JSON())
@@ -346,7 +392,12 @@ def test_json_value_init():
     assert element.key == "key"
     assert element.name == "json_value"
     assert isinstance(element.type, sa.String)
-    assert list(element.clauses) == [_json_col]
+    # the key and its JSON path are operands, not compile time literals, so
+    # that one cached statement can serve every key
+    column, key, path = element.clauses
+    assert column is _json_col
+    assert key.value == "key"
+    assert path.value == '$."key"'
 
 
 @pytest.mark.parametrize(
@@ -360,6 +411,303 @@ def test_json_value_init():
 )
 def test_json_value_compiles_per_dialect(dialect, expected):
     assert _compile(json_value(_json_col, "k"), dialect) == expected
+
+
+# --- JSON mutations and reads, per-dialect compilation ---
+
+
+@pytest.mark.parametrize(
+    ("dialect", "expected"),
+    [
+        (postgresql.dialect(), """(data || CAST('{"a":1}' AS JSONB))"""),
+        (sqlite.dialect(), """json_set(data, '$."a"', json('1'))"""),
+        (mysql.dialect(), """json_set(data, '$."a"', json_extract('1', '$'))"""),
+        (DefaultDialect(), """json_set(data, '$."a"', json_extract('1', '$'))"""),
+    ],
+)
+def test_json_update_compiles_per_dialect(dialect, expected):
+    assert _compile(json_update(_json_col, {"a": 1}), dialect) == expected
+
+
+def test_json_set_key_is_a_single_key_update():
+    assert _compile(json_set_key(_json_col, "a", 1), sqlite.dialect()) == _compile(
+        json_update(_json_col, {"a": 1}), sqlite.dialect()
+    )
+
+
+@pytest.mark.parametrize(
+    "dialect", [sqlite.dialect(), mysql.dialect(), DefaultDialect()]
+)
+def test_json_update_merges_every_key_in_one_call(dialect):
+    sql = _compile(json_update(_json_col, {"a": 1, "b": 2}), dialect)
+    # one json_set, not a nested pair -- and shallow, so a nested object
+    # replaces rather than merges
+    assert sql.count("json_set(") == 1
+    assert """'$."a"'""" in sql
+    assert """'$."b"'""" in sql
+
+
+@pytest.mark.parametrize(
+    ("dialect", "expected"),
+    [
+        (postgresql.dialect(), "(data - CAST(ARRAY['a', 'b'] AS TEXT[]))"),
+        (sqlite.dialect(), """json_remove(data, '$."a"', '$."b"')"""),
+        (mysql.dialect(), """json_remove(data, '$."a"', '$."b"')"""),
+        (DefaultDialect(), """json_remove(data, '$."a"', '$."b"')"""),
+    ],
+)
+def test_json_remove_key_compiles_per_dialect(dialect, expected):
+    assert _compile(json_remove_key(_json_col, "a", "b"), dialect) == expected
+
+
+@pytest.mark.parametrize(
+    ("dialect", "expected"),
+    [
+        (postgresql.dialect(), """(CAST('{"a":1}' AS JSONB) || data)"""),
+        (sqlite.dialect(), """json_insert(data, '$."a"', json('1'))"""),
+        (mysql.dialect(), """json_insert(data, '$."a"', json_extract('1', '$'))"""),
+        (DefaultDialect(), """json_insert(data, '$."a"', json_extract('1', '$'))"""),
+    ],
+)
+def test_json_insert_key_compiles_per_dialect(dialect, expected):
+    # the patch goes on the left of the postgres concat so an existing key wins
+    assert _compile(json_insert_key(_json_col, "a", 1), dialect) == expected
+
+
+@pytest.mark.parametrize(
+    ("dialect", "expected"),
+    [
+        (
+            postgresql.dialect(),
+            "jsonb_set(data, CAST(ARRAY['a'] AS TEXT[]), CAST('1' AS JSONB), false)",
+        ),
+        (sqlite.dialect(), """json_replace(data, '$."a"', json('1'))"""),
+        (mysql.dialect(), """json_replace(data, '$."a"', json_extract('1', '$'))"""),
+        (DefaultDialect(), """json_replace(data, '$."a"', json_extract('1', '$'))"""),
+    ],
+)
+def test_json_replace_key_compiles_per_dialect(dialect, expected):
+    # create_missing => false is what keeps postgres from inserting the key
+    assert _compile(json_replace_key(_json_col, "a", 1), dialect) == expected
+
+
+@pytest.mark.parametrize(
+    ("dialect", "expected"),
+    [
+        (
+            postgresql.dialect(),
+            """(data || jsonb_build_array(CAST('"x"' AS JSONB)))""",
+        ),
+        (sqlite.dialect(), """json_insert(data, '$[#]', json('"x"'))"""),
+        (
+            mysql.dialect(),
+            """json_array_append(data, '$', json_extract('"x"', '$'))""",
+        ),
+        (
+            DefaultDialect(),
+            """json_array_append(data, '$', json_extract('"x"', '$'))""",
+        ),
+    ],
+)
+def test_json_array_append_compiles_per_dialect(dialect, expected):
+    assert _compile(json_array_append(_json_col, "x"), dialect) == expected
+
+
+@pytest.mark.parametrize(
+    ("dialect", "expected"),
+    [
+        (postgresql.dialect(), "(data -> 'k')"),
+        (sqlite.dialect(), """json_extract(data, '$."k"')"""),
+        (mysql.dialect(), """json_extract(data, '$."k"')"""),
+        (DefaultDialect(), """json_extract(data, '$."k"')"""),
+    ],
+)
+def test_json_get_compiles_per_dialect(dialect, expected):
+    assert _compile(json_get(_json_col, "k"), dialect) == expected
+
+
+@pytest.mark.parametrize(
+    ("dialect", "expected"),
+    [
+        (postgresql.dialect(), "data ? 'k'"),
+        (sqlite.dialect(), """json_type(data, '$."k"') IS NOT NULL"""),
+        (mysql.dialect(), """json_contains_path(data, 'one', '$."k"')"""),
+        (DefaultDialect(), """json_contains_path(data, 'one', '$."k"')"""),
+    ],
+)
+def test_json_has_key_compiles_per_dialect(dialect, expected):
+    assert _compile(json_has_key(_json_col, "k"), dialect) == expected
+
+
+@pytest.mark.parametrize(
+    ("dialect", "expected"),
+    [
+        (postgresql.dialect(), "jsonb_array_length(data)"),
+        (sqlite.dialect(), "json_array_length(data)"),
+        (mysql.dialect(), "json_length(data)"),
+        (DefaultDialect(), "json_length(data)"),
+    ],
+)
+def test_json_array_length_compiles_per_dialect(dialect, expected):
+    assert _compile(json_array_length(_json_col), dialect) == expected
+
+
+def test_json_keys_compiles_per_dialect():
+    assert _compile(json_keys(_json_col), mysql.dialect()) == "json_keys(data)"
+    assert _compile(json_keys(_json_col), DefaultDialect()) == "json_keys(data)"
+
+    postgres = _compile(json_keys(_json_col), postgresql.dialect())
+    assert "jsonb_object_keys(data)" in postgres
+    # jsonb_agg over an object with no keys is NULL, not an empty array
+    assert "coalesce" in postgres
+    assert "CAST('[]' AS JSONB)" in postgres
+
+    assert "json_group_array(json_each.key)" in _compile(
+        json_keys(_json_col), sqlite.dialect()
+    )
+
+
+@pytest.mark.parametrize(
+    "dialect",
+    [postgresql.dialect(), sqlite.dialect(), mysql.dialect(), DefaultDialect()],
+)
+def test_json_update_with_no_keys_is_the_column(dialect):
+    # json_set(col) with no pair is a syntax error, and merging nothing is
+    # the column itself
+    assert _compile(json_update(_json_col, {}), dialect) == "data"
+
+
+@pytest.mark.parametrize(
+    "dialect",
+    [postgresql.dialect(), sqlite.dialect(), mysql.dialect(), DefaultDialect()],
+)
+def test_json_remove_key_with_no_keys_is_the_column(dialect):
+    assert _compile(json_remove_key(_json_col), dialect) == "data"
+
+
+@pytest.mark.parametrize(
+    ("factory", "message"),
+    [(json_update, "json_update keys"), (json_remove_key, "json_remove_key keys")],
+)
+def test_json_mutation_keys_must_be_strings(factory, message):
+    argument = {1: "a"} if factory is json_update else 1
+    with pytest.raises(ValueError, match=message):
+        factory(_json_col, argument)
+
+
+def test_json_mutations_nest():
+    expression = json_remove_key(json_update(_json_col, {"a": 1}), "b")
+    assert (
+        _compile(expression, sqlite.dialect())
+        == """json_remove(json_set(data, '$."a"', json('1')), '$."b"')"""
+    )
+
+
+def test_json_mutations_nest_on_postgresql_without_losing_precedence():
+    # binary "-" binds tighter than "||" in postgres, so an unparenthesized
+    # "a || b - c" would drop the key from the patch, not from the result
+    expression = json_remove_key(json_update(_json_col, {"a": 1}), "b")
+    assert (
+        _compile(expression, postgresql.dialect())
+        == """((data || CAST('{"a":1}' AS JSONB)) - CAST(ARRAY['b'] AS TEXT[]))"""
+    )
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("plain", '$."plain"'),
+        ('we"ird', '$."we\\"ird"'),
+        ("back\\slash", '$."back\\\\slash"'),
+    ],
+)
+def test_json_path_escapes_the_key(key, expected):
+    # the path is an operand, so assert the value we hand the driver; how it
+    # is then quoted into SQL text differs per dialect and is SQLAlchemy's job
+    _column, _mapping, path, _value = json_set_key(_json_col, key, 1).clauses
+    assert path.value == expected
+
+
+def test_json_mutation_values_are_bound_not_inlined():
+    compiled = json_update(_json_col, {"a": {"nested": True}}).compile(
+        dialect=sqlite.dialect()
+    )
+    assert {"nested": True} in compiled.params.values()
+
+
+def test_json_mutation_values_serialize_to_a_json_document():
+    # json() / json_extract() re-parse this text, so the value lands as a
+    # document rather than as a JSON string holding the serialized text.
+    # A bare dialect serializes with the stdlib, an engine with orjson, so
+    # compare the document and not the spacing.
+    serialized = JSON().bind_processor(sqlite.dialect())({"nested": True})
+    assert json_loads(serialized) == {"nested": True}
+
+
+# the comparator is the documented entry point, so every method has to
+# resolve through an InstrumentedAttribute and compile
+_COMPARATOR_CALLS = [
+    ("set_key", lambda c: c.set_key("a", 1), True),
+    ("update", lambda c: c.update({"a": 1}), True),
+    ("remove_key", lambda c: c.remove_key("a"), True),
+    ("insert_key", lambda c: c.insert_key("a", 1), True),
+    ("replace_key", lambda c: c.replace_key("a", 1), True),
+    ("array_append", lambda c: c.array_append(1), True),
+    ("get", lambda c: c.get("a"), True),
+    ("keys", lambda c: c.keys(), True),
+    # these answer with a boolean, an int and text, so they are ends of a
+    # chain rather than links in one
+    ("has_key", lambda c: c.has_key("a"), False),
+    ("array_length", lambda c: c.array_length(), False),
+    ("json_value", lambda c: c.json_value("a"), False),
+    ("contains", lambda c: c.contains(["a"]), False),
+]
+
+
+_COMPARATOR_CASES = [
+    (call, returns_json) for _name, call, returns_json in _COMPARATOR_CALLS
+]
+_COMPARATOR_IDS = [name for name, _call, _returns_json in _COMPARATOR_CALLS]
+
+
+@pytest.mark.parametrize(
+    ("call", "returns_json"), _COMPARATOR_CASES, ids=_COMPARATOR_IDS
+)
+def test_json_comparator_methods_resolve_and_compile(call, returns_json):
+    expression = call(_JsonMutationModel.data)
+    assert _compile(expression, sqlite.dialect())
+    # a JSON-typed result carries the comparator again, which is what lets
+    # the mutations chain: col.set_key(...).remove_key(...)
+    assert isinstance(expression.type, JSON) is returns_json
+
+
+@pytest.mark.parametrize(
+    ("call", "returns_json"), _COMPARATOR_CASES, ids=_COMPARATOR_IDS
+)
+def test_json_comparator_methods_chain_when_they_return_json(call, returns_json):
+    expression = call(_JsonMutationModel.data)
+    assert hasattr(expression, "remove_key") is returns_json
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        lambda key: json_update(_json_col, {key: 1}),
+        lambda key: json_remove_key(_json_col, key),
+        lambda key: json_get(_json_col, key),
+        lambda key: json_has_key(_json_col, key),
+        lambda key: json_value(_json_col, key),
+    ],
+)
+def test_json_keys_are_bound_so_a_cached_statement_serves_any_key(factory):
+    # the keys live in the clause list, so two expressions share one compiled
+    # statement and each execution binds its own key. A key baked in by a
+    # @compiles hook would instead be reused for every later key.
+    first, second = sa.select(factory("a")), sa.select(factory("b"))
+    assert first._generate_cache_key() == second._generate_cache_key()
+    assert str(first.compile(dialect=sqlite.dialect())) == str(
+        second.compile(dialect=sqlite.dialect())
+    )
 
 
 # --- JSON integration (SQLite) ---
@@ -392,6 +740,12 @@ class _JsonHasAllModel(_Base):
 
 class _JsonValueModel(_Base):
     __tablename__ = "test_json_value"
+    id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
+    data = sa.Column(JSON())
+
+
+class _JsonMutationModel(_Base):
+    __tablename__ = "test_json_mutation"
     id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
     data = sa.Column(JSON())
 
@@ -616,3 +970,168 @@ def test_validated_type_no_validation():
 def test_validated_type_custom_sa_column_type():
     vtype = ValidatedType(list[int], sa_column_type=sa.JSON)
     assert vtype.impl == sa.JSON
+
+
+# --- JSON mutations (SQLite) ---
+
+
+@contextlib.asynccontextmanager
+async def _mutation_table(db, initial):
+    """The mutation table holding one row of ``initial``."""
+    async with db.engine.begin() as conn:
+        await conn.run_sync(_JsonMutationModel.__table__.create, checkfirst=True)
+    try:
+        async with db.session() as session:
+            session.add(_JsonMutationModel(id=1, data=initial))
+        yield
+    finally:
+        async with db.engine.begin() as conn:
+            await conn.run_sync(_JsonMutationModel.__table__.drop, checkfirst=True)
+
+
+async def _mutate(db, expression):
+    """Apply ``expression`` to the row's data column and read it back."""
+    async with db.session() as session:
+        await session.execute(
+            sa.update(_JsonMutationModel).values({_JsonMutationModel.data: expression})
+        )
+        await session.commit()
+    async with db.session() as session:
+        return await session.scalar(sa.select(_JsonMutationModel.data))
+
+
+async def test_json_set_key_adds_a_key(db):
+    async with _mutation_table(db, {"a": 1}):
+        column = _JsonMutationModel.data
+        assert await _mutate(db, json_set_key(column, "b", 2)) == {"a": 1, "b": 2}
+
+
+async def test_json_set_key_overwrites_a_key(db):
+    async with _mutation_table(db, {"a": 1}):
+        column = _JsonMutationModel.data
+        assert await _mutate(db, json_set_key(column, "a", 9)) == {"a": 9}
+
+
+async def test_json_set_key_stores_a_nested_document(db):
+    async with _mutation_table(db, {"a": 1}):
+        column = _JsonMutationModel.data
+        # not the serialized text as a JSON string
+        assert await _mutate(db, json_set_key(column, "b", {"x": [1, 2]})) == {
+            "a": 1,
+            "b": {"x": [1, 2]},
+        }
+
+
+async def test_json_update_merges_shallowly(db):
+    async with _mutation_table(db, {"a": {"x": 1}, "b": 2}):
+        column = _JsonMutationModel.data
+        # "a" is replaced wholesale rather than merged into
+        assert await _mutate(db, json_update(column, {"a": {"y": 9}, "c": 3})) == {
+            "a": {"y": 9},
+            "b": 2,
+            "c": 3,
+        }
+
+
+async def test_json_update_with_no_keys_leaves_the_document(db):
+    async with _mutation_table(db, {"a": 1}):
+        column = _JsonMutationModel.data
+        assert await _mutate(db, json_update(column, {})) == {"a": 1}
+
+
+async def test_json_remove_key_drops_keys(db):
+    async with _mutation_table(db, {"a": 1, "b": 2, "c": 3}):
+        column = _JsonMutationModel.data
+        assert await _mutate(db, json_remove_key(column, "a", "c")) == {"b": 2}
+
+
+async def test_json_remove_key_ignores_a_missing_key(db):
+    async with _mutation_table(db, {"a": 1}):
+        column = _JsonMutationModel.data
+        assert await _mutate(db, json_remove_key(column, "nope")) == {"a": 1}
+
+
+async def test_json_insert_key_only_adds_a_missing_key(db):
+    async with _mutation_table(db, {"a": 1}):
+        column = _JsonMutationModel.data
+        assert await _mutate(db, json_insert_key(column, "b", 2)) == {"a": 1, "b": 2}
+
+
+async def test_json_insert_key_leaves_an_existing_key(db):
+    async with _mutation_table(db, {"a": 1}):
+        column = _JsonMutationModel.data
+        assert await _mutate(db, json_insert_key(column, "a", 9)) == {"a": 1}
+
+
+async def test_json_replace_key_only_updates_an_existing_key(db):
+    async with _mutation_table(db, {"a": 1}):
+        column = _JsonMutationModel.data
+        assert await _mutate(db, json_replace_key(column, "a", 9)) == {"a": 9}
+
+
+async def test_json_replace_key_does_not_add_a_missing_key(db):
+    async with _mutation_table(db, {"a": 1}):
+        column = _JsonMutationModel.data
+        assert await _mutate(db, json_replace_key(column, "b", 2)) == {"a": 1}
+
+
+async def test_json_array_append_appends_one_element(db):
+    async with _mutation_table(db, [1, 2]):
+        column = _JsonMutationModel.data
+        assert await _mutate(db, json_array_append(column, 3)) == [1, 2, 3]
+
+
+async def test_json_array_append_nests_a_list_rather_than_concatenating(db):
+    async with _mutation_table(db, [1]):
+        column = _JsonMutationModel.data
+        assert await _mutate(db, json_array_append(column, [2, 3])) == [1, [2, 3]]
+
+
+async def test_json_mutations_compose_in_one_statement(db):
+    async with _mutation_table(db, {"a": 1, "b": 2}):
+        column = _JsonMutationModel.data
+        expression = json_remove_key(json_update(column, {"c": 3}), "a")
+        assert await _mutate(db, expression) == {"b": 2, "c": 3}
+
+
+async def test_json_mutation_of_a_null_column_propagates_null(db):
+    async with _mutation_table(db, None):
+        column = _JsonMutationModel.data
+        assert await _mutate(db, json_set_key(column, "a", 1)) is None
+
+
+async def test_json_reads_on_sqlite(db):
+    async with _mutation_table(db, {"a": {"x": 1}, "b": [1, 2, 3]}):
+        column = _JsonMutationModel.data
+        async with db.session() as session:
+            assert await session.scalar(sa.select(json_get(column, "a"))) == {"x": 1}
+            assert await session.scalar(sa.select(json_has_key(column, "a")))
+            assert not await session.scalar(sa.select(json_has_key(column, "nope")))
+            assert (
+                await session.scalar(
+                    sa.select(json_array_length(json_get(column, "b")))
+                )
+                == 3
+            )
+            assert sorted(await session.scalar(sa.select(json_keys(column)))) == [
+                "a",
+                "b",
+            ]
+
+
+async def test_json_has_key_addresses_object_keys_not_values(db):
+    # the gap json_has_any_key / json_has_all_keys leave on sqlite, where
+    # their json_each fallback matches values instead
+    async with _mutation_table(db, {"a": "b"}):
+        column = _JsonMutationModel.data
+        async with db.session() as session:
+            assert await session.scalar(sa.select(json_has_key(column, "a")))
+            assert not await session.scalar(sa.select(json_has_key(column, "b")))
+
+
+async def test_json_comparator_methods_reach_the_mutations(db):
+    async with _mutation_table(db, {"a": 1}):
+        column = _JsonMutationModel.data
+        assert await _mutate(db, column.set_key("b", 2)) == {"a": 1, "b": 2}
+        assert await _mutate(db, column.remove_key("a")) == {"b": 2}
+        assert await _mutate(db, column.update({"c": 3})) == {"b": 2, "c": 3}

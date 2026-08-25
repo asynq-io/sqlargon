@@ -1,6 +1,6 @@
 [project]
 name = "sqlargon"
-version = "1.0.0"
+version = "1.1.0b1"
 description = "SQLAlchemy repository pattern and utilities"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
@@ -8,6 +8,7 @@ authors = [{ name = "RaRhAeu", email = "rarha_eu@protonmail.com" }]
 dependencies = [
     "sqlalchemy>2.0,<3",
     "alembic>=1.13.1,<2",
+    "anyio>=4.0,<5",
     "orjson>=3.11.9,<4",
     "pydantic>=2.0,<3",
     "pydantic-settings>=2.1.0,<3",
@@ -15,7 +16,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-fastapi = ["fastapi>=0.115,<1"]
 postgres = ["asyncpg<1.0","alembic-postgresql-enum>=1.8.0,<2.0.0"]
 sqlite = ["aiosqlite>=0.19.0,<1"]
 mysql = ["asyncmy>=0.2.11"]
@@ -23,6 +23,13 @@ pagination = ["sqlakeyset>=2.0.1716332987,<3"]
 cron = ["croniter>=2.0,<7", "anyio>=4.0,<5"]
 opentelemetry = ["opentelemetry-instrumentation-sqlalchemy"]
 
+fastapi = ["fastapi>=0.115,<1"]
+eventiq = ["eventiq>=1.1.14,<2"]
+
+vectors = [
+    "pgvector>=0.5.0",
+    "sqliteai-vector>=1.0.0,<2"
+]
 standard = ["sqlargon[postgres,sqlite,pagination,cron,opentelemetry]"]
 
 [dependency-groups]
@@ -31,6 +38,7 @@ dev = [
     { include-group = "test" },
     { include-group = "e2e" },
     { include-group = "docs" },
+    "eventiq>=1.1.14",
     "fastapi>=0.138.0",
     "greenlet",
 ]
@@ -39,14 +47,17 @@ e2e = [
     "testcontainers>=4.15.0",
     # asyncmy needs it for the caching_sha2_password auth of MySQL 8
     "cryptography",
+    # the loadable extension the SQLite vector search runs on
+    "sqliteai-vector>=1.0.0,<2",
 ]
 
 test = [
+    "anyio>=4.14.1",
     "pytest",
     "pytest-cov",
     "pytest-sugar",
     "pytest-repeat",
-    "pytest-asyncio",
+    "pytest-xdist>=3.6",
     "httpx>=0.28.1",
     "pytest-timeout>=2.4.0",
 ]
@@ -76,9 +87,14 @@ build-backend = "uv_build"
 
 
 [tool.pytest.ini_options]
-addopts = "--cov=./sqlargon --count=3"
+# loadgroup keeps every test of an e2e backend on the worker that started its
+# container, so the backends run in parallel but each one boots only once
+addopts = "--cov=./sqlargon --count=3 --numprocesses=auto --dist=loadgroup"
 testpaths = ["./tests"]
-asyncio_mode = "auto"
+anyio_mode = "auto"
+# the anyio plugin only runs an async fixture for a test that pulls the backend
+# in, which a sync test requesting an autouse async fixture would not do
+usefixtures = ["anyio_backend"]
 timeout = 20
 markers = [
     "e2e: runs against a real database backend; enabled with --e2e",
@@ -144,6 +160,8 @@ classmethod-decorators = [
 [tool.ruff.lint.per-file-ignores]
 "sqlargon/*" = ["PLC0415"]
 "sqlargon/types/*" = ["ARG002"]
+# the search hooks name the arguments their dialect overrides act on
+"sqlargon/query_builder.py" = ["ARG002"]
 "tests/*" = ["S101", "ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "SLF001", "PLR2004", "ARG002"]
 # a fixture requested for its side effect only, and testcontainers imported
 # lazily so an ordinary run never pulls it in
@@ -165,10 +183,14 @@ max-complexity = 8
 DEP001 = ["opentelemetry"]
 DEP002 = [
     "alembic",
+    # an alembic autogenerate plugin, loaded by name rather than imported
+    "alembic-postgresql-enum",
     "asyncpg",
     "aiosqlite",
     "asyncmy",
     "opentelemetry-instrumentation-sqlalchemy",
+    # the "standard" extra names the package's own extras
+    "sqlargon",
 ]
 DEP003 = ["sqlargon", "typing_extensions", "pydantic_core", "starlette"]
 

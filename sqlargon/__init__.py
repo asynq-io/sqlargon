@@ -1,14 +1,41 @@
 from importlib.metadata import version
 
+from .audit import latest_relationship, version_foreign_key, version_mapped_column
 from .cluster import AnyDatabase, DatabaseCluster
 from .database import BaseDatabase, Database, ReadOnlyDatabase, ReadOnlyError
 from .functools import atomic
-from .orm import Base, Model, ORMModel, SoftDeleteBase, SoftDeleteModel
+from .mixins import (
+    AuditableMixin,
+    IntegerAuditableMixin,
+    UUIDAuditableMixin,
+    UUIDVersionedMixin,
+    VersionedMixin,
+    XminVersionedMixin,
+)
+from .orm import (
+    AnyAuditableBase,
+    AnyVersionedBase,
+    AuditableBase,
+    AuditableModel,
+    Base,
+    Model,
+    ORMModel,
+    SoftDeleteBase,
+    SoftDeleteModel,
+    UUIDAuditableBase,
+    VersionedBase,
+    VersionedModel,
+    XminVersionedBase,
+)
 from .registry import get_default_database, set_default_database
 from .repository import (
+    AppendOnlyError,
+    AuditableRepository,
+    ConcurrentModificationError,
     DeletedRowExistsError,
     SoftDeleteRepository,
     SQLAlchemyRepository,
+    VersionedRepository,
 )
 from .routing import (
     DefaultRouter,
@@ -29,13 +56,22 @@ __version__ = version(__name__)
 
 __all__ = [
     "AbstractUnitOfWork",
+    "AnyAuditableBase",
     "AnyDatabase",
+    "AnyVersionedBase",
+    "AppendOnlyError",
+    "AuditableBase",
+    "AuditableMixin",
+    "AuditableModel",
+    "AuditableRepository",
     "Base",
     "BaseDatabase",
+    "ConcurrentModificationError",
     "Database",
     "DatabaseCluster",
     "DefaultRouter",
     "DeletedRowExistsError",
+    "IntegerAuditableMixin",
     "Model",
     "ModelRouter",
     "ORMModel",
@@ -52,11 +88,23 @@ __all__ = [
     "SoftDeleteBase",
     "SoftDeleteModel",
     "SoftDeleteRepository",
+    "UUIDAuditableBase",
+    "UUIDAuditableMixin",
+    "UUIDVersionedMixin",
+    "VersionedBase",
+    "VersionedMixin",
+    "VersionedModel",
+    "VersionedRepository",
+    "XminVersionedBase",
+    "XminVersionedMixin",
     "__version__",
     "atomic",
     "get_default_database",
+    "latest_relationship",
     "read_only",
     "set_default_database",
     "use_context",
     "using",
+    "version_foreign_key",
+    "version_mapped_column",
 ]

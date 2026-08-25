@@ -18,9 +18,12 @@ if TYPE_CHECKING:
     from contextlib import AbstractContextManager
     from pathlib import Path
 
-# ``uuidv7()`` is a PostgreSQL 18 builtin, so GenerateUUIDV7 needs at least it;
-# postgres17 is run without the v7 server default to pin what still works there
-POSTGRES_IMAGE = os.environ.get("SQLARGON_E2E_POSTGRES_IMAGE", "postgres:18-alpine")
+# ``uuidv7()`` is a PostgreSQL 18 builtin, so GenerateUUIDV7 falls back to
+# GEN_RANDOM_UUID() below it; postgres17 pins that the suite passes on the
+# fallback. The 18 image is the pgvector build -- that PostgreSQL plus the
+# extension the vector suite needs -- so it stands in for the plain one rather
+# than adding a backend; 17 runs without pgvector, and so without vectors.
+POSTGRES_IMAGE = os.environ.get("SQLARGON_E2E_POSTGRES_IMAGE", "pgvector/pgvector:pg18")
 POSTGRES_17_IMAGE = os.environ.get(
     "SQLARGON_E2E_POSTGRES_17_IMAGE", "postgres:17-alpine"
 )
@@ -101,12 +104,16 @@ class Backend:
     delete_returning: bool
     native_locks: bool
     server_side_uuid: bool
+    #: a ``uuidv7()`` column default yields a real v7 value, not the fallback
     server_side_uuidv7: bool
     skip_locked: bool
     json_key_operators: bool
     #: an upsert may leave a column of the conflict set out of its values
     partial_upsert: bool = True
     is_mariadb: bool = False
+    #: the server can search vectors -- pgvector, or the sqlite-vector
+    #: loadable extension
+    vector_search: bool = False
 
     @property
     def is_mysql_family(self) -> bool:
@@ -128,6 +135,7 @@ BACKENDS: dict[str, Backend] = {
         skip_locked=False,
         # the SQLite key operators match JSON values, not object keys
         json_key_operators=False,
+        vector_search=True,
     ),
     "postgres": Backend(
         name="postgres",
@@ -142,6 +150,7 @@ BACKENDS: dict[str, Backend] = {
         server_side_uuidv7=True,
         skip_locked=True,
         json_key_operators=True,
+        vector_search=True,
     ),
     "postgres17": Backend(
         name="postgres17",
@@ -153,7 +162,8 @@ BACKENDS: dict[str, Backend] = {
         delete_returning=True,
         native_locks=True,
         server_side_uuid=True,
-        # uuidv7() is a PostgreSQL 18 builtin the 17 server lacks
+        # uuidv7() is a PostgreSQL 18 builtin the 17 server lacks, so the
+        # column default falls back to a random, v4 value here
         server_side_uuidv7=False,
         skip_locked=True,
         json_key_operators=True,

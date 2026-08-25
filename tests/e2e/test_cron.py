@@ -78,8 +78,8 @@ async def test_sync_recomputes_only_the_changed_schedule(cron: Cron):
     before = {task.name: task.next_run_at for task in await cron.tasks()}
 
     rescheduling = Cron(namespace=NAMESPACE)
-    rescheduling.task(EVERY_MINUTE, name="kept")(kept)
-    rescheduling.task("*/5 * * * *", name="changed")(changed)
+    rescheduling.task(EVERY_MINUTE, "kept", kept)
+    rescheduling.task("*/5 * * * *", "changed", changed)
     await rescheduling.sync()
 
     after = {task.name: task for task in await rescheduling.tasks()}

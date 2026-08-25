@@ -88,6 +88,26 @@ async def test_repository_without_database_uses_default(db, user_model, user_dat
         await db.drop_all()
 
 
+def test_repository_database_attribute_wins_over_default(db, user_model):
+    set_default_database(db)
+    bound = Database(MEMORY_URL)
+
+    class Repository(SQLAlchemyRepository[user_model]):
+        database = bound
+
+    assert Repository().db is bound
+
+
+def test_repository_using_db_wins_over_the_database_attribute(user_model):
+    bound = Database(MEMORY_URL)
+    other = Database(MEMORY_URL)
+
+    class Repository(SQLAlchemyRepository[user_model]):
+        database = bound
+
+    assert Repository().using(db=other).db is other
+
+
 async def test_repository_using_db_wins_over_default(db, user_model):
     set_default_database(db)
     other = Database(MEMORY_URL)

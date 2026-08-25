@@ -1,7 +1,7 @@
-import asyncio
 import sqlite3
 from datetime import datetime, timezone
 
+import anyio
 import pytest
 import sqlalchemy as sa
 
@@ -161,10 +161,12 @@ async def test_lock_serializes_tasks_under_one_name(db: Database):
     async def work(tag: str) -> None:
         async with db.lock("serialized"):
             order.append(f"enter {tag}")
-            await asyncio.sleep(0.01)
+            await anyio.sleep(0.01)
             order.append(f"exit {tag}")
 
-    await asyncio.gather(work("a"), work("b"), work("c"))
+    async with anyio.create_task_group() as tg:
+        for tag in "abc":
+            tg.start_soon(work, tag)
 
     # every enter is immediately followed by the matching exit
     assert [entry.split()[0] for entry in order] == ["enter", "exit"] * 3
